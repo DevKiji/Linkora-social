@@ -338,3 +338,39 @@ body {
 .pb-safe {
   padding-bottom: calc(4rem + env(safe-area-inset-bottom));
 }
+
+/* ── Issue #172: Per-card stagger skeleton animation ── */
+@keyframes statCardFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-stat-card {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+/* ── Issue #174: Follow/Unfollow button — disable transitions when motion is
+   reduced (covers the CheckIcon slide, label cross-fade, and button bg/color
+   transitions all at once). ── */
+@media (prefers-reduced-motion: reduce) {
+  button[aria-pressed] *,
+  button[aria-pressed] {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
