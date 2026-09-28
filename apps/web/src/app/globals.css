@@ -351,22 +351,21 @@ body {
   }
 }
 
+.creator-stat-card {
+  animation: statCardFadeIn 350ms ease both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .creator-stat-card {
+    animation: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .skeleton-stat-card {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;
-  }
-}
-
-/* ── Issue #174: Follow/Unfollow button — disable transitions when motion is
-   reduced (covers the CheckIcon slide, label cross-fade, and button bg/color
-   transitions all at once). ── */
-@media (prefers-reduced-motion: reduce) {
-  button[aria-pressed] *,
-  button[aria-pressed] {
-    transition: none !important;
-    animation: none !important;
   }
 }
 
