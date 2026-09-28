@@ -69,12 +69,13 @@ export function DashboardHeader({ isLoading, onToggleLoading }: DashboardHeaderP
               padding: "8px 18px",
               borderRadius: "10px",
               border: "none",
-              background: "linear-gradient(135deg, var(--color-secondary) 0%, var(--color-primary) 100%)",
-              color: "#FFFFFF",
+              background:
+                "linear-gradient(135deg, var(--color-secondary) 0%, var(--color-primary) 100%)",
+              color: "var(--color-text-on-brand)",
               fontSize: "0.9rem",
               fontWeight: 600,
               cursor: "pointer",
-              boxShadow: "0 4px 12px rgba(124, 58, 237, 0.25)",
+              boxShadow: "0 4px 12px color-mix(in srgb, var(--color-primary) 25%, transparent)",
             }}
           >
             + Create Post
@@ -93,13 +94,9 @@ export function DashboardHeader({ isLoading, onToggleLoading }: DashboardHeaderP
               style={{
                 padding: "8px 16px",
                 borderRadius: "20px",
-                border: isActive
-                  ? "1px solid var(--color-primary)"
-                  : "1px solid transparent",
+                border: isActive ? "1px solid var(--color-primary)" : "1px solid transparent",
                 backgroundColor: isActive ? "var(--muted)" : "transparent",
-                color: isActive
-                  ? "var(--color-primary)"
-                  : "var(--text-muted)",
+                color: isActive ? "var(--color-primary)" : "var(--text-muted)",
                 fontSize: "0.9rem",
                 fontWeight: isActive ? 600 : 500,
                 cursor: "pointer",

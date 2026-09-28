@@ -1,15 +1,22 @@
 @import "tailwindcss";
 
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-border: var(--color-border-token);
+}
+
 :root {
-  /* Dark Mode Dashboard Color Palette - Issue #900 */
-  --bg-primary: #0B1120;
-  --bg-secondary: #1E293B;
-  --bg-card: #1E293B;
-  --text-primary: #F8FAFC;
-  --text-secondary: #94A3B8;
-  --accent-primary: #60A5FA;
-  --accent-secondary: #818CF8;
-  --border: #334155;
+  /* Compatibility aliases for older surfaces, backed by theme tokens. */
+  --bg-primary: var(--color-bg);
+  --bg-secondary: var(--color-surface-1);
+  --bg-card: var(--color-surface-1);
+  --text-primary: var(--color-text-primary);
+  --text-secondary: var(--color-text-secondary);
+  --accent-primary: var(--color-primary);
+  --accent-secondary: var(--color-primary-hover);
+  --border: var(--color-border);
+  --color-border-token: var(--color-border);
 
   /* Design tokens */
   --color-primary: #7c3aed;
@@ -77,14 +84,14 @@
 }
 
 [data-theme="dark"] {
-  --bg-primary: #0B1120;
-  --bg-secondary: #1E293B;
-  --bg-card: #1E293B;
-  --text-primary: #F8FAFC;
-  --text-secondary: #94A3B8;
-  --accent-primary: #60A5FA;
-  --accent-secondary: #818CF8;
-  --border: #334155;
+  --bg-primary: var(--color-bg);
+  --bg-secondary: var(--color-surface-1);
+  --bg-card: var(--color-surface-1);
+  --text-primary: var(--color-text-primary);
+  --text-secondary: var(--color-text-secondary);
+  --accent-primary: var(--color-primary);
+  --accent-secondary: var(--color-primary-hover);
+  --border: var(--color-border);
 
   --color-bg: #0f172a;
   --color-surface-1: #1e293b;

@@ -25,19 +25,19 @@ interface ProposalCardProps {
 
 const statusColors: Record<string, { bg: string; text: string; border: string }> = {
   Active: {
-    bg: "rgba(124, 58, 237, 0.15)",
+    bg: "color-mix(in srgb, var(--color-primary) 15%, transparent)",
     text: "var(--color-primary)",
-    border: "rgba(124, 58, 237, 0.4)",
+    border: "color-mix(in srgb, var(--color-primary) 40%, transparent)",
   },
   Passed: {
-    bg: "rgba(16, 185, 129, 0.15)",
+    bg: "color-mix(in srgb, var(--color-success) 15%, transparent)",
     text: "var(--color-success)",
-    border: "rgba(16, 185, 129, 0.4)",
+    border: "color-mix(in srgb, var(--color-success) 40%, transparent)",
   },
   Executed: {
-    bg: "rgba(6, 182, 212, 0.15)",
+    bg: "color-mix(in srgb, var(--color-secondary) 15%, transparent)",
     text: "var(--color-secondary)",
-    border: "rgba(6, 182, 212, 0.4)",
+    border: "color-mix(in srgb, var(--color-secondary) 40%, transparent)",
   },
   default: {
     bg: "var(--muted)",
@@ -59,13 +59,10 @@ export function ProposalCard({
 
   return (
     <article
-      className="proposal-card"
+      className="proposal-card border border-border bg-background text-foreground"
       style={{
-        border: "1px solid var(--color-border)",
         borderRadius: "0.75rem",
         padding: "1.25rem",
-        backgroundColor: "var(--background)",
-        boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
       }}
       aria-label={`Proposal ${p.id.toString()}: Update ${p.parameter}`}
     >
@@ -218,8 +215,8 @@ export function ProposalCard({
                 fontSize: "0.85rem",
                 fontWeight: 500,
                 cursor: "pointer",
-                border: "1px solid rgba(16, 185, 129, 0.5)",
-                backgroundColor: "rgba(16, 185, 129, 0.12)",
+                border: "1px solid color-mix(in srgb, var(--color-success) 50%, transparent)",
+                backgroundColor: "color-mix(in srgb, var(--color-success) 12%, transparent)",
                 color: "var(--color-success)",
                 transition: "background-color 0.15s ease",
               }}
@@ -235,8 +232,8 @@ export function ProposalCard({
                 fontSize: "0.85rem",
                 fontWeight: 500,
                 cursor: "pointer",
-                border: "1px solid rgba(239, 68, 68, 0.5)",
-                backgroundColor: "rgba(239, 68, 68, 0.12)",
+                border: "1px solid color-mix(in srgb, var(--color-error) 50%, transparent)",
+                backgroundColor: "color-mix(in srgb, var(--color-error) 12%, transparent)",
                 color: "var(--color-error)",
                 transition: "background-color 0.15s ease",
               }}

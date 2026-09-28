@@ -16,7 +16,7 @@ function buildMessage(notification: Notification): React.ReactNode {
   const actorLink = (
     <Link
       href={`/profile/${notification.actor}`}
-      className="font-medium text-violet-400 hover:underline"
+      className="font-medium text-[var(--color-primary)] hover:underline"
     >
       @{actor}
     </Link>
@@ -25,7 +25,7 @@ function buildMessage(notification: Notification): React.ReactNode {
   const postRef = (
     <Link
       href={postId !== undefined ? `/posts/${postId}` : "#"}
-      className="font-medium text-violet-400 hover:underline"
+      className="font-medium text-[var(--color-primary)] hover:underline"
     >
       {excerpt ? `"${excerpt}"` : postId !== undefined ? `post #${postId}` : "a post"}
     </Link>
@@ -51,7 +51,10 @@ function buildMessage(notification: Notification): React.ReactNode {
         <>
           {actorLink}{" "}
           {parameter ? `executed proposal for ${parameter}` : "created a new governance proposal"} —{" "}
-          <Link href="/governance" className="font-medium text-violet-400 hover:underline">
+          <Link
+            href="/governance"
+            className="font-medium text-[var(--color-primary)] hover:underline"
+          >
             view proposal #{proposalId}
           </Link>
         </>
@@ -86,15 +89,13 @@ function NotificationRow({
       }}
       role="button"
       tabIndex={0}
-      className={`flex cursor-pointer items-start gap-4 rounded-xl border px-5 py-4 transition-colors ${
-        notification.read
-          ? "border-[var(--border)] bg-[var(--muted)]/40"
-          : "border-violet-700/50 bg-violet-900/20"
+      className={`flex cursor-pointer items-start gap-4 rounded-xl border border-border px-5 py-4 text-foreground transition-colors ${
+        notification.read ? "bg-background" : "bg-[var(--muted)]"
       }`}
     >
       <span
         className={`mt-1 flex h-2.5 w-2.5 flex-shrink-0 rounded-full ${
-          notification.read ? "bg-transparent" : "bg-violet-500"
+          notification.read ? "bg-transparent" : "bg-[var(--color-primary)]"
         }`}
         aria-hidden="true"
       />
@@ -156,7 +157,7 @@ export default function NotificationsPage() {
   const groups = groupByDate(notifications);
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-6 md:py-8">
+    <div className="mx-auto max-w-2xl bg-background px-4 py-6 text-foreground md:py-8">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-[var(--foreground)]">Notifications</h1>
         {notifications.length > 0 && !markAllReadClicked && (
@@ -165,7 +166,7 @@ export default function NotificationsPage() {
               markAllRead();
               setMarkAllReadClicked(true);
             }}
-            className="text-sm font-medium text-violet-400 hover:text-violet-300 transition-colors"
+            className="text-sm font-medium text-[var(--color-primary)] transition-colors hover:opacity-80"
             data-testid="mark-all-read"
           >
             Mark all read
@@ -175,7 +176,7 @@ export default function NotificationsPage() {
 
       {notifications.length === 0 ? (
         <div
-          className="rounded-xl border border-[var(--border)] bg-[var(--muted)]/40 px-6 py-12 text-center"
+          className="rounded-xl border border-border bg-background px-6 py-12 text-center"
           data-testid="empty-state"
         >
           <p className="text-[var(--text-muted)]">
@@ -203,7 +204,7 @@ export default function NotificationsPage() {
             <div className="mt-6 flex justify-center">
               <button
                 onClick={loadMore}
-                className="rounded-lg border border-[var(--border)] px-5 py-2 text-sm font-medium text-[var(--text-muted)] hover:border-violet-500/60 hover:text-violet-400 transition-colors"
+                className="rounded-lg border border-border px-5 py-2 text-sm font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--color-primary)]"
                 data-testid="load-more"
               >
                 Load more

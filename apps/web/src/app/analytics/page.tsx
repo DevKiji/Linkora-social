@@ -88,12 +88,10 @@ export default function AnalyticsPage() {
 
   if (!connected || !address) {
     return (
-      <div className="min-h-screen bg-[var(--bg-primary)]">
+      <div className="min-h-screen bg-background text-foreground">
         <div className="max-w-6xl mx-auto p-4 md:p-8">
-          <div className="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--bg-tertiary)] p-12 text-center">
-            <h1 className="text-2xl font-bold text-[var(--text-primary)] mb-3">
-              Creator Analytics
-            </h1>
+          <div className="rounded-2xl border border-border bg-background p-12 text-center">
+            <h1 className="mb-3 text-2xl font-bold text-foreground">Creator Analytics</h1>
             <p className="text-[var(--text-muted)]">
               Connect your wallet to view your analytics dashboard.
             </p>
@@ -104,12 +102,12 @@ export default function AnalyticsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--bg-primary)]">
+    <div className="min-h-screen bg-background text-foreground">
       <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-[var(--text-primary)]">Creator Analytics</h1>
+            <h1 className="text-2xl font-bold text-foreground">Creator Analytics</h1>
             <p className="text-sm text-[var(--text-muted)] mt-1">
               Performance metrics for your content
             </p>
@@ -117,15 +115,15 @@ export default function AnalyticsPage() {
 
           <div className="flex items-center gap-3">
             {/* Date range selector */}
-            <div className="flex rounded-xl border border-[var(--bg-tertiary)] overflow-hidden">
+            <div className="flex overflow-hidden rounded-xl border border-border">
               {([7, 30, 90] as DateRange[]).map((d) => (
                 <button
                   key={d}
                   onClick={() => setDateRange(d)}
                   className={`px-4 py-2 text-sm font-medium transition-colors ${
                     dateRange === d
-                      ? "bg-[var(--accent-coral)] text-white"
-                      : "bg-[var(--bg-secondary)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                      ? "bg-[var(--color-primary)] text-[var(--color-text-on-brand)]"
+                      : "bg-background text-[var(--text-muted)] hover:text-foreground"
                   }`}
                 >
                   {d}d
@@ -137,7 +135,7 @@ export default function AnalyticsPage() {
             <button
               onClick={handleExport}
               disabled={state.status !== "loaded" || exporting}
-              className="px-4 py-2 text-sm font-medium rounded-xl border border-[var(--bg-tertiary)] bg-[var(--bg-secondary)] text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors disabled:opacity-50"
+              className="rounded-xl border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-[var(--color-surface-1)] disabled:opacity-50"
             >
               {exporting ? "Exporting..." : "Export CSV"}
             </button>
@@ -154,11 +152,11 @@ export default function AnalyticsPage() {
         )}
 
         {state.status === "error" && (
-          <div className="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--bg-tertiary)] p-12 text-center">
+          <div className="rounded-2xl border border-border bg-background p-12 text-center">
             <p className="text-[var(--error)] mb-4">{state.message}</p>
             <button
               onClick={loadData}
-              className="px-6 py-2 rounded-xl bg-[var(--accent-coral)] text-white font-medium hover:opacity-90 transition-opacity"
+              className="rounded-xl bg-[var(--color-primary)] px-6 py-2 font-medium text-[var(--color-text-on-brand)] transition-opacity hover:opacity-90"
             >
               Retry
             </button>
@@ -232,7 +230,7 @@ function Dashboard({ data }: { data: AnalyticsData }) {
               <Line
                 type="monotone"
                 dataKey="likes"
-                stroke="#FF6B5B"
+                stroke="var(--accent-coral)"
                 strokeWidth={2}
                 dot={false}
                 name="Likes"
@@ -259,7 +257,7 @@ function Dashboard({ data }: { data: AnalyticsData }) {
               <Line
                 type="monotone"
                 dataKey="followers"
-                stroke="#4ECDC4"
+                stroke="var(--accent-teal)"
                 strokeWidth={2}
                 dot={false}
                 name="Followers"
@@ -283,7 +281,12 @@ function Dashboard({ data }: { data: AnalyticsData }) {
                   color: "var(--text-primary)",
                 }}
               />
-              <Bar dataKey="earnings" fill="#7c3aed" radius={[4, 4, 0, 0]} name="Tips" />
+              <Bar
+                dataKey="earnings"
+                fill="var(--color-primary)"
+                radius={[4, 4, 0, 0]}
+                name="Tips"
+              />
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -376,7 +379,7 @@ function Dashboard({ data }: { data: AnalyticsData }) {
 
 function SummaryCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--bg-tertiary)] p-4">
+    <div className="min-h-[84px] rounded-2xl border border-border bg-background p-4 text-foreground">
       <p className="text-xs text-[var(--text-muted)] mb-1">{label}</p>
       <p className="text-xl font-bold text-[var(--text-primary)] truncate">{value}</p>
     </div>
@@ -393,7 +396,7 @@ function ChartCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--bg-tertiary)] p-6">
+    <div className="rounded-2xl border border-border bg-background p-6 text-foreground">
       <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-1">{title}</h3>
       <p className="text-sm text-[var(--text-muted)] mb-4">{subtitle}</p>
       {children}

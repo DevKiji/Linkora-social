@@ -123,7 +123,7 @@ export function RightSidebar() {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              color: "#FFFFFF",
+              color: "var(--color-text-on-brand)",
               fontWeight: 700,
               fontSize: "1.1rem",
             }}
@@ -146,9 +146,7 @@ export function RightSidebar() {
                 <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
               </svg>
             </div>
-            <span style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>
-              @7CAI.326
-            </span>
+            <span style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>@7CAI.326</span>
           </div>
         </div>
 
@@ -392,7 +390,7 @@ export function RightSidebar() {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    color: "#FFF",
+                    color: "var(--color-text-on-brand)",
                     fontSize: "0.85rem",
                     fontWeight: 600,
                   }}
@@ -456,9 +454,7 @@ export function RightSidebar() {
               borderRadius: "4px",
               border: "none",
               backgroundColor:
-                currentPage === dotIndex
-                  ? "var(--color-primary)"
-                  : "var(--color-border)",
+                currentPage === dotIndex ? "var(--color-primary)" : "var(--color-border)",
               cursor: "pointer",
               transition: "all 0.3s ease",
             }}
