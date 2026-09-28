@@ -16,8 +16,8 @@ export default function DashboardPage() {
       style={{
         display: "flex",
         minHeight: "100vh",
-        backgroundColor: "var(--bg-primary, #0B1120)",
-        color: "var(--text-primary, #F8FAFC)",
+        backgroundColor: "var(--background)",
+        color: "var(--foreground)",
         width: "100%",
         overflowX: "hidden",
       }}
@@ -29,7 +29,7 @@ export default function DashboardPage() {
       <main
         style={{
           flex: 1,
-          backgroundColor: "#0F172A",
+          backgroundColor: "var(--background)",
           minHeight: "100vh",
           display: "flex",
           flexDirection: "column",
