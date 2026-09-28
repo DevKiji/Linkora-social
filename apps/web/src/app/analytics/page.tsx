@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useWallet } from "@/hooks/useWallet";
+import { EmptyStateIllustration } from "@/components/ui/EmptyStateIllustration";
 import {
   LineChart,
   Line,
@@ -166,11 +167,11 @@ export default function AnalyticsPage() {
         )}
 
         {state.status === "empty" && (
-          <div className="bg-[var(--bg-secondary)] rounded-2xl border border-[var(--bg-tertiary)] p-12 text-center">
-            <p className="text-[var(--text-muted)]">
-              No analytics data available yet. Create posts to see your metrics.
-            </p>
-          </div>
+          <EmptyStateIllustration
+            variant="creator"
+            title="No analytics data yet"
+            description="Create posts and grow your audience to start seeing your engagement metrics and earnings here."
+          />
         )}
 
         {state.status === "loaded" && <Dashboard data={state.data} />}
