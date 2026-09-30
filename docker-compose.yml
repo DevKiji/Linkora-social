@@ -27,13 +27,21 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    # Rate-limit counters only — losing them on restart costs at most one
-    # window of enforcement, so no persistence is configured.
-    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    # Persisted with RDB snapshots so local dev state (caches, rate-limit
+    # windows, pub/sub queues) survives container restarts.
+    # Disable persistence by starting with the "no-redis" profile:
+    #   docker compose --profile no-redis up
+    # Or override via REDIS_PERSISTENCE=0 to switch to no-persistence mode.
+    command: ["redis-server", "--save", "60 1", "--appendonly", "yes", "--appendfsync", "everysec"]
     ports:
       - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
     networks:
       - backend
+    profiles:
+      - "redis"
+      - "default"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -137,90 +145,62 @@ services:
       retries: 3
       start_period: 30s
 
-  # ── Nginx (reverse proxy + rate limiter) ────────────────────────────────────
-  nginx:
-    image: nginx:1.27-alpine
+  notification:
+    build:
+      context: ./services/notification
     restart: unless-stopped
-    volumes:
-      - ./infra/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-linkora}:${POSTGRES_PASSWORD:-linkora}@postgres:5432/${POSTGRES_DB:-linkora}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      INDEXER_URL: http://indexer:3000
+      PORT: 3002
     ports:
-      - "80:80"
+      - "3002:3002"
     networks:
-      - frontend
       - backend
+      - database
     depends_on:
-      indexer:
+      postgres:
         condition: service_healthy
-      dm-relay:
-        condition: service_healthy
-      analytics-oracle:
+      redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:3002/health/ready"]
       interval: 10s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 30s
 
-  # ── Prometheus ──────────────────────────────────────────────────────────────
-  prometheus:
-    image: prom/prometheus:v2.51.2
-    restart: unless-stopped
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.path=/prometheus"
-      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
-      - "--web.console.templates=/usr/share/prometheus/consoles"
-      - "--web.enable-lifecycle"
-    volumes:
-      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./infra/prometheus/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
-      - prometheus_data:/prometheus
-    ports:
-      - "127.0.0.1:9090:9090"
-    networks:
-      - monitoring
-      - backend
-    depends_on:
-      - indexer
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:9090/-/healthy"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # ── Grafana ─────────────────────────────────────────────────────────────────
-  grafana:
-    image: grafana/grafana:10.4.2
+  search:
+    build:
+      context: ./services/search
     restart: unless-stopped
     environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
-      GF_USERS_ALLOW_SIGN_UP: "false"
-      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3030}
-    volumes:
-      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./infra/grafana/dashboards:/etc/grafana/dashboards:ro
-      - grafana_data:/var/lib/grafana
+      DATABASE_URL: postgresql://${POSTGRES_USER:-linkora}:${POSTGRES_PASSWORD:-linkora}@postgres:5432/${POSTGRES_DB:-linkora}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      PORT: 3003
     ports:
-      - "127.0.0.1:3030:3000"
+      - "3003:3003"
     networks:
-      - monitoring
+      - backend
+      - database
     depends_on:
-      - prometheus
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD", "curl", "-f", "http://localhost:3003/health/ready"]
+      interval: 10s
+      timeout: 5s
       retries: 3
+      start_period: 30s
 
 networks:
   frontend:
   backend:
   database:
-  monitoring:
 
 volumes:
   postgres_data:
-  prometheus_data:
-  grafana_data:
+  redis_data:
