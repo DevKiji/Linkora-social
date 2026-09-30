@@ -66,6 +66,11 @@ jobs:
           TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
           TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
 
+      - name: Verify reputation and analytics type check
+        run: |
+          pnpm --filter @linkora/reputation typecheck
+          pnpm --filter @linkora/analytics typecheck
+
       - name: Run JS/TS tests
         run: pnpm test
         env:
