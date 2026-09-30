@@ -2,131 +2,6 @@
 
 Typed TypeScript client for `LinkoraContract` on Stellar.
 
-## Common Operations
-
-A quick-reference cheatsheet for common SDK tasks. All snippets use TypeScript with standard `linkora-sdk` imports.
-
-### 1. Initialize Client
-
-```ts
-import { LinkoraClient } from "linkora-sdk";
-
-const client = new LinkoraClient({
-  contractId: "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
-  rpcUrl: "https://soroban-testnet.stellar.org",
-  networkPassphrase: "Test SDF Network ; September 2015",
-});
-```
-
-### 2. Connect Wallet (Freighter)
-
-```ts
-import { FreighterSigner } from "linkora-sdk";
-
-const signer = new FreighterSigner({ network: "testnet" });
-const address = await signer.getPublicKey();
-```
-
-### 3. Create a Post
-
-```ts
-import { submitTransaction } from "linkora-sdk";
-
-const txXdr = await client.prepareCreatePostTx(address, "Hello Stellar!");
-const hash = await submitTransaction(client, txXdr, signer);
-```
-
-### 4. Follow a User
-
-```ts
-import { submitTransaction } from "linkora-sdk";
-
-const txXdr = await client.prepareFollowTx(address, targetAddress);
-const hash = await submitTransaction(client, txXdr, signer);
-```
-
-### 5. Unfollow a User
-
-```ts
-import { submitTransaction } from "linkora-sdk";
-
-const txXdr = await client.prepareUnfollowTx(address, targetAddress);
-const hash = await submitTransaction(client, txXdr, signer);
-```
-
-### 6. Tip a Creator
-
-```ts
-import { submitTransaction } from "linkora-sdk";
-
-const txXdr = await client.prepareTipTx(address, postId, tokenAddress, 10_000_000n);
-const hash = await submitTransaction(client, txXdr, signer);
-```
-
-### 7. Like a Post
-
-```ts
-import { submitTransaction } from "linkora-sdk";
-
-const txXdr = await client.prepareLikePostTx(address, postId);
-const hash = await submitTransaction(client, txXdr, signer);
-```
-
-### 8. Get Feed / Posts
-
-```ts
-import { Post } from "linkora-sdk";
-
-const totalPosts = await client.getPostCount();
-const post: Post | null = await client.getPost(totalPosts > 0n ? totalPosts - 1n : 0n);
-```
-
-### 9. Get User Profile
-
-```ts
-import { Profile } from "linkora-sdk";
-
-const profile: Profile | null = await client.getProfile(address);
-console.log(profile?.username);
-```
-
-### 10. Deposit to Community Pool
-
-```ts
-import { submitTransaction } from "linkora-sdk";
-
-const txXdr = await client.preparePoolDepositTx(address, poolId, 50_000_000n);
-const hash = await submitTransaction(client, txXdr, signer);
-```
-
-### 11. Register Encrypted DM Key
-
-```ts
-import { submitTransaction } from "linkora-sdk";
-
-const txXdr = await client.prepareDmKeyTx(address, publicKeyBytes);
-const hash = await submitTransaction(client, txXdr, signer);
-```
-
-### 12. Subscribe to Contract Events
-
-```ts
-import { LinkoraEventSubscriber } from "linkora-sdk";
-
-const sub = new LinkoraEventSubscriber({ rpcUrl, contractId });
-sub.on("event", (evt) => console.log("Event received:", evt));
-await sub.start();
-```
-
-### 13. Monitor Connection Health
-
-```ts
-import { ConnectionHealthMonitor } from "linkora-sdk";
-
-const monitor = new ConnectionHealthMonitor(rpcUrl);
-const isHealthy = await monitor.check();
-```
-
 ## Transaction retries: exponential backoff with jitter
 
 `TransactionQueue` submits transactions through the Soroban RPC with a retry
@@ -221,67 +96,6 @@ queue.on("status", (e) => {
 });
 ```
 
-## Cache Module
-
-The SDK ships with a lightweight **TTL in-memory cache** (`SdkCache`) to reduce redundant RPC round-trips for data that changes infrequently. It is entirely opt-in — `LinkoraClient` does not cache automatically.
-
-### TTL Defaults
-
-| Use Case                | Recommended TTL | Notes                                       |
-| ----------------------- | --------------- | ------------------------------------------- |
-| General reads           | 30 s (default)  | Profiles, pool metadata, contract state     |
-| Profile reads           | 60 s            | Profiles change rarely                      |
-| Governance parameters   | 120 s           | On-chain governance is slow-moving          |
-| Pool metadata           | 30 s            | Pools can receive tips at any time          |
-
-The default TTL is **30 seconds** with a default max size of **500 entries**.
-
-### Eviction Policy
-
-- **Lazy TTL eviction** — stale entries are removed at `get` time, never by a background timer.
-- **LRU-style size cap** — when `maxSize` is reached, the oldest entry (by insertion order) is evicted before the new one is stored.
-- `invalidate(key)` — removes a single key immediately (call this after any write).
-- `clear()` — flushes all entries.
-
-### Usage
-
-```ts
-import { SdkCache } from "linkora-sdk";
-
-// Default 30 s TTL, max 500 entries:
-const cache = new SdkCache();
-
-// Custom TTL and size:
-const profileCache = new SdkCache({ ttlMs: 60_000, maxSize: 200 });
-
-// Cache-aside pattern with LinkoraClient:
-async function getCachedProfile(address: string) {
-  const key = `profile:${address}`;
-  const hit = profileCache.get(key);
-  if (hit) return hit;
-
-  const profile = await client.getProfile(address);
-  profileCache.set(key, profile);
-  return profile;
-}
-
-// Invalidate after a write:
-await client.updateProfile(address, { username: "new-name" });
-profileCache.invalidate(`profile:${address}`);
-```
-
-### When NOT to Use the Cache
-
-Bypass or disable the cache for any data that must reflect the latest on-chain state:
-
-- **Real-time balances** — token or XLM balances change with every tipping transaction.
-- **Live post feeds** — new posts appear continuously.
-- **Pending / in-flight transactions** — transaction status must always be fetched fresh.
-- **Nonces / sequence numbers** — always fetch the current ledger sequence before building a transaction; a cached value causes `tx_bad_seq`.
-- **Active governance votes** — tallies change as participants vote.
-
----
-
 ## API Semantics
 
 The SDK exposes two distinct paths for mutative (write) operations:
@@ -305,106 +119,262 @@ If you attempt to sign and submit this XDR directly, the network will reject it 
 
 ---
 
-## PostClient
+## ProfileClient — profile methods
 
-Post operations are exposed directly on `LinkoraClient`. This section covers creating and deleting posts on-chain, and querying the post feed from the off-chain indexer.
-
-### Methods
-
-| Method                                              | Type                  | Description                                                |
-| --------------------------------------------------- | --------------------- | ---------------------------------------------------------- |
-| `createPost(author, content)`                       | Write (throwaway XDR) | Builds a `create_post` operation XDR                       |
-| `prepareCreatePostTx(author, content, horizonUrl?)` | Write (submittable)   | Fetches real sequence, simulates, returns wallet-ready XDR |
-| `deletePost(author, postId)`                        | Write (throwaway XDR) | Builds a `delete_post` operation XDR                       |
-| `getPost(postId)`                                   | Read                  | Returns a `Post` object or `null`                          |
-| `getPostCount()`                                    | Read                  | Returns the total number of posts as `bigint`              |
-| `getPostsByAuthor(author, offset, limit)`           | Read                  | Returns an array of post IDs by author                     |
-| `getLikeCount(postId)`                              | Read                  | Returns the like count for a post                          |
-
-### FeedOptions interface
-
-The indexer's feed endpoint accepts the following query parameters. Pass them when calling `/api/feed` or `/api/feed/following/:address`:
-
-| Field    | Type               | Default | Description                                                                                            |
-| -------- | ------------------ | ------- | ------------------------------------------------------------------------------------------------------ |
-| `limit`  | `number`           | `20`    | Number of posts to return (max 100)                                                                    |
-| `offset` | `number`           | `0`     | Number of posts to skip (for offset pagination)                                                        |
-| `viewer` | `string`           | —       | Stellar address of the requesting user; filters out posts from blocked accounts                        |
-| `cursor` | `string \| number` | —       | Opaque cursor for cursor-based pagination (explore feed: numeric score; following feed: ISO timestamp) |
-| `tag`    | `string`           | —       | Filter posts by a single hashtag (case-insensitive)                                                    |
-
-The response shape for all feed endpoints:
-
-```ts
-{
-  posts: Post[];       // array of post objects
-  total: number;       // total matching rows (offset feed) or posts.length (cursor feed)
-  limit: number;       // echoed from request
-  offset: number;      // echoed from request (offset feed only)
-  has_more: boolean;   // true when more pages are available
-  next_cursor?: any;   // next cursor value (cursor feed only)
-}
-```
-
-### Examples
-
-#### createPost — build operation XDR for server-side queue
+All profile operations are available directly on the `LinkoraClient` instance. There is no
+separate `ProfileClient` class — the methods are part of `LinkoraClient`, which extends the
+generated base client.
 
 ```ts
 import { LinkoraClient } from "linkora-sdk";
 
 const client = new LinkoraClient({
-  contractId: "CXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+  contractId: "CCNZILBYJQBX...",
   rpcUrl: "https://soroban-testnet.stellar.org",
+  networkPassphrase: "Test SDF Network ; September 2015",
 });
-
-// Returns throwaway XDR — pass to TransactionQueue or buildMultiOpTx, not directly to wallet
-const opXdr = client.createPost("GBFOY...", "Hello, Soroban!");
-console.log("Operation XDR:", opXdr);
 ```
 
-#### prepareCreatePostTx — wallet-ready transaction
+---
+
+### `getProfile(address)`
+
+Fetch a user profile by Stellar address.
+
+**Signature:**
 
 ```ts
-// Returns a fully simulated XDR with the real account sequence
-const txXdr = await client.prepareCreatePostTx("GBFOY...", "Hello, Soroban!");
-// Pass txXdr to Freighter or another Stellar wallet for signing
+getProfile(address: string): Promise<Profile | null>
 ```
 
-#### deletePost
+**Parameters:**
+
+| Name      | Type     | Description                            |
+| --------- | -------- | -------------------------------------- |
+| `address` | `string` | Stellar public key (`G…`) of the user. |
+
+**Returns:** `Promise<Profile | null>` — the `Profile` object, or `null` if the profile
+does not exist or has expired (storage rent unpaid).
+
+**Errors thrown:**
+
+| Error class         | When                                                             |
+| ------------------- | ---------------------------------------------------------------- |
+| `InvalidInputError` | `address` is not a valid Stellar public key or contract address. |
+| `NetworkError`      | RPC request failed.                                              |
+| `SimulationError`   | Contract simulation failed for an unexpected reason.             |
+
+**Example:**
 
 ```ts
-const opXdr = client.deletePost("GBFOY...", 42n);
-console.log("Delete Post Op XDR:", opXdr);
+const profile = await client.getProfile("GBFOY2LJQZ...");
+if (profile) {
+  console.log(`Username: ${profile.username}`);
+  console.log(`Creator token: ${profile.creator_token}`);
+} else {
+  console.log("Profile not found.");
+}
 ```
 
-#### getFeed — offset pagination via the indexer REST API
+---
+
+### `setProfile(user, username, creatorToken)`
+
+Build a `set_profile` transaction XDR. Creates a new profile or updates an existing one.
+
+> **Note:** This method returns a base64 XDR string built with a throwaway keypair. It is
+> not directly submittable. Pass the result to `TransactionQueue` or use
+> `prepareTransaction` to build a submittable envelope.
+
+**Signature:**
 
 ```ts
-const response = await fetch(
-  "https://indexer.linkora.example/api/feed?limit=20&offset=0&viewer=GBFOY..."
+setProfile(user: string, username: string, creatorToken: string): string
+```
+
+**Parameters:**
+
+| Name           | Type     | Description                                                               |
+| -------------- | -------- | ------------------------------------------------------------------------- |
+| `user`         | `string` | Stellar public key of the profile owner. Must be the transaction signer.  |
+| `username`     | `string` | Unique display name (1–50 characters). Must not be taken by another user. |
+| `creatorToken` | `string` | Contract ID of the user's SEP-41 creator token.                           |
+
+**Returns:** `string` — base64-encoded transaction XDR (throwaway source, not directly submittable).
+
+**Errors thrown:**
+
+| Error class         | When                                                                     |
+| ------------------- | ------------------------------------------------------------------------ |
+| `InvalidInputError` | `user` or `creatorToken` is not a valid address, or `username` is empty. |
+| `ValidationError`   | `username` or `creatorToken` fails format validation.                    |
+
+**Example:**
+
+```ts
+// Build the XDR and enqueue it for submission
+const xdr = client.setProfile("GBFOY2LJQZ...", "alice", "CABC123DEF...");
+
+queue.enqueue(xdr);
+await queue.run();
+```
+
+**Submittable variant:** If you need a fully prepared transaction (with correct sequence
+number and footprint), use `prepareTransaction` directly:
+
+```ts
+const sourceAccount = await client.getAccountForTx("GBFOY2LJQZ...");
+const tx = await client.prepareTransaction(
+  "set_profile",
+  sourceAccount
+  // scvAddress, scvString, scvAddress for user/username/creatorToken
 );
-const { posts, has_more } = await response.json();
+const xdrEnvelope = tx.toEnvelope().toXDR("base64");
+// Sign xdrEnvelope with your wallet and submit
 ```
 
-#### getFeed — cursor-based explore feed
+---
+
+### `deleteProfile(user)`
+
+Build a `delete_profile` transaction XDR. Deletes the caller's profile and places a
+tombstone for lazy storage cleanup.
+
+**Signature:**
 
 ```ts
-// First page
-const first = await fetch("https://indexer.linkora.example/api/feed/explore?limit=20");
-const { posts, next_cursor } = await first.json();
-
-// Next page — pass next_cursor as cursor
-const second = await fetch(
-  `https://indexer.linkora.example/api/feed/explore?limit=20&cursor=${next_cursor}`
-);
+deleteProfile(user: string): string
 ```
 
-#### getFeed — following feed with tag filter
+**Parameters:**
+
+| Name   | Type     | Description                              |
+| ------ | -------- | ---------------------------------------- |
+| `user` | `string` | Stellar public key of the profile owner. |
+
+**Returns:** `string` — base64-encoded transaction XDR (throwaway source, not directly submittable).
+
+**Errors thrown:**
+
+| Error class         | When                                   |
+| ------------------- | -------------------------------------- |
+| `InvalidInputError` | `user` is not a valid Stellar address. |
+
+**Example:**
 
 ```ts
-const response = await fetch(
-  "https://indexer.linkora.example/api/feed/following/GBFOY...?limit=20&tag=defi"
-);
-const { posts } = await response.json();
+const xdr = client.deleteProfile("GBFOY2LJQZ...");
+queue.enqueue(xdr);
+await queue.run();
+```
+
+---
+
+### `getProfileCount()`
+
+Get the total number of profiles ever registered. This counter is never decremented on
+profile deletion.
+
+**Signature:**
+
+```ts
+getProfileCount(): Promise<bigint>
+```
+
+**Returns:** `Promise<bigint>` — cumulative profile creation count.
+
+**Example:**
+
+```ts
+const count = await client.getProfileCount();
+console.log(`Total registered users: ${count.toString()}`);
+```
+
+---
+
+### `getAddressByUsername(username)`
+
+Resolve a username to its owner's Stellar address. Use this to look up profiles by name.
+
+> **Note:** The contract does not expose a full-text search endpoint. For searching
+> profiles by partial username, use the indexer's REST API instead.
+
+**Signature:**
+
+```ts
+getAddressByUsername(username: string): Promise<string | null>
+```
+
+**Parameters:**
+
+| Name       | Type     | Description                                     |
+| ---------- | -------- | ----------------------------------------------- |
+| `username` | `string` | The exact username to look up (case-sensitive). |
+
+**Returns:** `Promise<string | null>` — the owner's Stellar public key, or `null` if the
+username is not registered.
+
+**Errors thrown:**
+
+| Error class         | When                                          |
+| ------------------- | --------------------------------------------- |
+| `InvalidInputError` | `username` is empty or exceeds 50 characters. |
+| `NetworkError`      | RPC request failed.                           |
+
+**Example:**
+
+```ts
+// Look up by username, then fetch the full profile
+const address = await client.getAddressByUsername("alice");
+if (address) {
+  const profile = await client.getProfile(address);
+  console.log(`alice's address: ${address}`);
+  console.log(`Creator token: ${profile?.creator_token}`);
+} else {
+  console.log("Username not found.");
+}
+```
+
+---
+
+### `Profile` type
+
+```ts
+interface Profile {
+  address: string; // Stellar public key of the owner
+  username: string; // Unique display name
+  creator_token: string; // Contract ID of the creator's SEP-41 token
+}
+```
+
+---
+
+### Error types reference
+
+All profile methods throw errors from the SDK error hierarchy. The most common ones:
+
+| Class               | Code                | When                                                     |
+| ------------------- | ------------------- | -------------------------------------------------------- |
+| `InvalidInputError` | `INVALID_INPUT`     | Bad address format, empty string, or out-of-range value. |
+| `ValidationError`   | `VALIDATION_ERROR`  | Structural validation failed (e.g., wrong type).         |
+| `NotFoundError`     | `NOT_FOUND`         | Profile, username, or resource does not exist on-chain.  |
+| `NetworkError`      | `NETWORK_ERROR`     | RPC connection or timeout failure.                       |
+| `SimulationError`   | `SIMULATION_FAILED` | Contract simulation returned an error.                   |
+
+Import them from `linkora-sdk`:
+
+```ts
+import { NotFoundError, InvalidInputError, NetworkError, SimulationError } from "linkora-sdk";
+
+try {
+  const profile = await client.getProfile("GBFOY2...");
+} catch (err) {
+  if (err instanceof NotFoundError) {
+    console.log("Profile does not exist.");
+  } else if (err instanceof NetworkError) {
+    console.log("RPC unavailable, try again later.");
+  } else {
+    throw err;
+  }
+}
 ```
