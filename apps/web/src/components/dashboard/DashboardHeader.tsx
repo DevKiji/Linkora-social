@@ -13,69 +13,29 @@ export function DashboardHeader({ isLoading, onToggleLoading }: DashboardHeaderP
   const [activeTab, setActiveTab] = useState("Cont rives");
 
   return (
-    <header
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: "16px",
-        padding: "24px 24px 16px 24px",
-        borderBottom: "1px solid var(--border, #334155)",
-        backgroundColor: "var(--bg-primary, #0B1120)",
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+    <header className="flex flex-col gap-4 border-b border-[var(--border)] bg-[var(--background)] px-6 pb-4 pt-6">
+      <div className="flex items-center justify-between">
         <div>
-          <h1
-            style={{
-              margin: 0,
-              color: "var(--text-primary, #F8FAFC)",
-              fontSize: "1.75rem",
-              fontWeight: 800,
-              letterSpacing: "-0.03em",
-            }}
-          >
+          <h1 className="text-3xl font-extrabold tracking-tight text-[var(--foreground)]">
             Daskloode
           </h1>
-          <p
-            style={{
-              margin: "4px 0 0",
-              color: "var(--text-secondary, #94A3B8)",
-              fontSize: "0.9rem",
-            }}
-          >
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
             Explore community updates, Stellar Soroban posts, and custom content streams.
           </p>
         </div>
 
-        {/* Skeleton Toggle Button & Create Action */}
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+        {/* Skeleton Toggle & Create Action */}
+        <div className="flex items-center gap-2.5">
           <button
+            type="button"
             onClick={onToggleLoading}
-            style={{
-              padding: "8px 14px",
-              borderRadius: "10px",
-              border: "1px solid var(--border, #334155)",
-              backgroundColor: "var(--bg-secondary, #1E293B)",
-              color: "var(--text-secondary, #94A3B8)",
-              fontSize: "0.85rem",
-              fontWeight: 500,
-              cursor: "pointer",
-            }}
+            className="rounded-xl border border-[var(--border)] bg-[var(--muted)] px-4 py-2 text-sm font-medium text-[var(--text-muted)] transition-colors hover:border-violet-500/60 hover:text-violet-400"
           >
             {isLoading ? "Show Posts" : "Skeleton View"}
           </button>
           <button
-            style={{
-              padding: "8px 18px",
-              borderRadius: "10px",
-              border: "none",
-              background: "linear-gradient(135deg, #60A5FA 0%, #818CF8 100%)",
-              color: "#FFFFFF",
-              fontSize: "0.9rem",
-              fontWeight: 600,
-              cursor: "pointer",
-              boxShadow: "0 4px 12px rgba(96, 165, 250, 0.25)",
-            }}
+            type="button"
+            className="rounded-xl bg-gradient-to-r from-blue-400 to-indigo-400 px-5 py-2 text-sm font-semibold text-white shadow-md shadow-blue-400/20 transition-opacity hover:opacity-90"
           >
             + Create Post
           </button>
@@ -83,29 +43,20 @@ export function DashboardHeader({ isLoading, onToggleLoading }: DashboardHeaderP
       </div>
 
       {/* Sub-Navigation Tabs */}
-      <nav style={{ display: "flex", gap: "8px", overflowX: "auto" }}>
+      <nav className="flex gap-2 overflow-x-auto" aria-label="Dashboard tabs">
         {subNavTabs.map((tab) => {
           const isActive = activeTab === tab;
           return (
             <button
               key={tab}
+              type="button"
               onClick={() => setActiveTab(tab)}
-              style={{
-                padding: "8px 16px",
-                borderRadius: "20px",
-                border: isActive
-                  ? "1px solid var(--accent-primary, #60A5FA)"
-                  : "1px solid transparent",
-                backgroundColor: isActive ? "#1E293B" : "transparent",
-                color: isActive
-                  ? "var(--accent-primary, #60A5FA)"
-                  : "var(--text-secondary, #94A3B8)",
-                fontSize: "0.9rem",
-                fontWeight: isActive ? 600 : 500,
-                cursor: "pointer",
-                transition: "all 0.2s ease",
-                whiteSpace: "nowrap",
-              }}
+              className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-all ${
+                isActive
+                  ? "border border-violet-400 bg-[var(--muted)] font-semibold text-violet-400"
+                  : "border border-transparent text-[var(--text-muted)] hover:text-[var(--foreground)]"
+              }`}
+              aria-current={isActive ? "page" : undefined}
             >
               {tab}
             </button>

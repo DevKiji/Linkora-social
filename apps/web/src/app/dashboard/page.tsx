@@ -12,30 +12,12 @@ export default function DashboardPage() {
   const toggleLoading = () => setIsLoading((prev) => !prev);
 
   return (
-    <div
-      style={{
-        display: "flex",
-        minHeight: "100vh",
-        backgroundColor: "var(--bg-primary, #0B1120)",
-        color: "var(--text-primary, #F8FAFC)",
-        width: "100%",
-        overflowX: "hidden",
-      }}
-    >
+    <div className="flex min-h-screen w-full overflow-x-hidden bg-[var(--background)] text-[var(--foreground)]">
       {/* 1. Left Sidebar Column (240px / collapsible) */}
       <LeftSidebar />
 
-      {/* 2. Main Content Area Column (Background #0F172A) */}
-      <main
-        style={{
-          flex: 1,
-          backgroundColor: "#0F172A",
-          minHeight: "100vh",
-          display: "flex",
-          flexDirection: "column",
-          overflowY: "auto",
-        }}
-      >
+      {/* 2. Main Content Area Column */}
+      <main className="flex flex-1 flex-col overflow-y-auto min-h-screen bg-[var(--muted)]">
         <DashboardHeader isLoading={isLoading} onToggleLoading={toggleLoading} />
         <DashboardPostGrid isLoading={isLoading} />
       </main>
