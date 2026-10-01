@@ -9,7 +9,8 @@ on:
       - "tests/load/**"
       - ".github/workflows/load-tests.yml"
       - "services/dm-relay/**"
-  # Allow manual trigger with a custom BASE_URL override
+      - "services/indexer/**"
+  # Allow manual trigger with custom BASE_URL overrides
   workflow_dispatch:
     inputs:
       base_url_notifications:
@@ -25,11 +26,12 @@ on:
 # reports a warning but does NOT block merges to main.  Set
 # continue-on-error: false on the k6 step to make them blocking.
 jobs:
+  # ---------------------------------------------------------------------------
+  # Notification dispatch load test (#284)
+  # ---------------------------------------------------------------------------
   load-test-notifications:
     name: "Load Test — Notification Dispatch (#284)"
     runs-on: ubuntu-latest
-    # The test spins up the dm-relay service via Docker Compose.
-    # This job is informational and does not block CI.
     continue-on-error: true
 
     steps:
@@ -47,7 +49,6 @@ jobs:
       - name: Start services
         run: |
           docker compose up -d postgres redis dm-relay
-          # Wait for dm-relay to be healthy (up to 60 s)
           timeout 60 bash -c \
             'until curl -sf http://localhost:3001/health/ready; do sleep 2; done' \
             || echo "dm-relay did not become healthy in time; continuing anyway"
@@ -70,6 +71,58 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: load-test-notifications-results
+          path: tests/load/results/
+          retention-days: 30
+
+      - name: Tear down services
+        if: always()
+        run: docker compose down -v
+
+  # ---------------------------------------------------------------------------
+  # Search service load test (#283)
+  # ---------------------------------------------------------------------------
+  load-test-search:
+    name: "Load Test — Search Service (#283)"
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install k6
+        run: |
+          curl -fsSL https://dl.k6.io/key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/k6-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" \
+            | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update -q
+          sudo apt-get install -y k6
+
+      - name: Start services
+        run: |
+          docker compose up -d postgres redis indexer
+          timeout 90 bash -c \
+            'until curl -sf http://localhost:3000/health/ready; do sleep 2; done' \
+            || echo "indexer did not become healthy in time; continuing anyway"
+
+      - name: Create results directory
+        run: mkdir -p tests/load/results
+
+      - name: Run search load test
+        env:
+          BASE_URL: ${{ github.event.inputs.base_url_search || 'http://localhost:3000' }}
+        run: |
+          k6 run \
+            --out json=tests/load/results/search-raw.json \
+            -e BASE_URL="${BASE_URL}" \
+            tests/load/search.js \
+          || echo "k6 exited with non-zero status (threshold breach or error)"
+
+      - name: Upload load test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-search-results
           path: tests/load/results/
           retention-days: 30
 

@@ -312,178 +312,158 @@ protected endpoint must be JSON**, or the raw-body capture in
 
 ---
 
-## 10. Reputation Module
+## Rewards
 
-> **Status: planned.** The on-chain storage keys and contract functions described here are
-> the intended design. The Rust implementation will live in
-> `packages/contracts/contracts/linkora-contracts/src/reputation.rs` (not yet committed).
-> The off-chain scorer is planned at `packages/reputation/src/scorer.ts`. This section is the
-> authoritative design reference; code that conflicts with it should be treated as a bug.
+Creator rewards in Linkora flow through two complementary mechanisms: **direct tipping**
+(peer-to-peer, synchronous) and **analytics-attested rewards** (oracle-driven, asynchronous).
+There is no separate `rewards.rs` module — both mechanisms are implemented directly in
+`src/lib.rs`.
 
-The Reputation Module assigns every address a numeric score derived from its on-chain
-activity. The score is used to gate features (promoted feeds, governance proposal creation),
-inform off-chain ranking, and drive the tier label shown in the UI.
-
----
-
-### 10.1 Storage Keys
-
-The reputation module adds three entries to the `StorageKey` enum in
-`packages/contracts/contracts/linkora-contracts/src/lib.rs`. They follow the same pattern
-as all other persistent keys in that enum:
-
-| Variant                 | Type  | Storage class | Description                                                                                                   |
-| ----------------------- | ----- | ------------- | ------------------------------------------------------------------------------------------------------------- |
-| `RepScore(Address)`     | `i64` | persistent    | Current aggregate reputation score for the address.                                                           |
-| `RepLastDecay(Address)` | `u64` | persistent    | Ledger sequence number at which decay was last applied. Used to amortise time-decay across infrequent writes. |
-| `RepTier(Address)`      | `u32` | persistent    | Cached tier index (`0`–`3`) for fast reads by the UI. Recomputed whenever the score changes.                  |
-
-All three keys carry the standard TTL (`LEDGER_BUMP` / `LEDGER_THRESHOLD` from `lib.rs`,
-~30 days) and must be bumped in the same call that writes them.
+> **Architecture note.** The issue references an epoch/distribute/claim pattern. The current
+> contract does not implement on-chain epoch accounting or a pull-based claim queue. Rewards
+> reach creators in one of two ways:
+>
+> 1. **Tip** — immediately transferred to the post author minus the protocol fee.
+> 2. **Analytics attestation** — the oracle verifies a signed CBOR report off-chain; the
+>    contract records the attestation on-chain and emits an event that the indexer uses to
+>    trigger an off-chain distribution action (e.g., airdrop or pool deposit).
 
 ---
 
-### 10.2 Scoring Signals
+### Mechanism 1 — Direct tipping
 
-The score is the sum of weighted signals drawn from on-chain state. The weights below match
-those in `services/indexer/migrations/009_post_scores.sql`, which is the canonical source
-of truth for the indexer-side feed ranking; the contract uses the same weights so the
-numbers are comparable.
+Any user can tip a post. Tokens are split between the post author and the treasury at the
+time of the call — there is no claimable balance to withdraw later.
 
-| Signal             | Weight                   | Source                                               |
-| ------------------ | ------------------------ | ---------------------------------------------------- |
-| Post like received | `+5` per like            | `Post.like_count` (on-chain)                         |
-| Tip received       | `+tip_total / 1_000_000` | `Post.tip_total` in stroops, normalised to XLM scale |
-| Follower gained    | `+2` per follower        | `StorageKey::FollowersCount(Address)`                |
-| Post created       | `+1` per post            | `StorageKey::AuthorPosts(Address)` length            |
-| Moderation upheld  | `−50` per upheld report  | `ReportStatus::Upheld` verdict                       |
+**Function:** `tip(tipper, post_id, token, amount)`
 
-All signals are evaluated against the **author address**, not the post or transaction
-initiator. Tip totals are bounded by `MAX_TIP_TOTAL` (10¹⁸ stroops) to prevent storage-rent
-exhaustion; the normalised score contribution is therefore capped at 10¹² points.
+| Parameter | Type      | Description                                       |
+| --------- | --------- | ------------------------------------------------- |
+| `tipper`  | `Address` | Address sending the tip (must be authenticated).  |
+| `post_id` | `u64`     | ID of the post to tip.                            |
+| `token`   | `Address` | SEP-41 token contract address.                    |
+| `amount`  | `i128`    | Tip amount in smallest token units (must be > 0). |
 
----
-
-### 10.3 Decay Formula
-
-Reputation decays at a rate of **1 point per hour of inactivity** (no score-increasing event
-recorded for that address). The decay is applied lazily — it is calculated and written the
-next time any scored event touches the address, rather than on a clock tick.
+**Fee split:**
 
 ```
-elapsed_hours = (current_ledger − RepLastDecay[address]) × 5 / 3600
-new_score     = max(0, RepScore[address] − floor(elapsed_hours))
-RepLastDecay  = current_ledger
+fee_amount   = floor(amount × fee_bps / 10_000)
+author_amount = amount − fee_amount
 ```
 
-The constant `5` is the approximate ledger close time in seconds (the same factor used
-throughout `lib.rs` for `TIP_COOLDOWN_LEDGERS`, `LEDGER_BUMP`, etc.).
+`fee_amount` is transferred to the treasury. `author_amount` is transferred directly to the
+post author. `post.tip_total` is incremented by `author_amount` (capped at 10^18).
 
-The score floor is `0`. Decay cannot push a score below zero.
+**Cooldown:** One tip per tipper per post per `TIP_COOLDOWN_WINDOW` ledgers (default ~1 day
+at 5 s/ledger). Configurable by Admin via `set_tip_cooldown_window`.
 
----
+**Errors:**
 
-### 10.4 Tier Thresholds
-
-The tier index cached in `RepTier(Address)` maps to a named label:
-
-| Tier index | Label            | Min score | Notes                                                    |
-| ---------- | ---------------- | --------- | -------------------------------------------------------- |
-| `0`        | Newcomer         | 0         | Default for any address with no recorded activity.       |
-| `1`        | Member           | 100       | Unlocks promoted-feed eligibility.                       |
-| `2`        | Trusted          | 500       | Unlocks governance proposal creation.                    |
-| `3`        | Verified Creator | 2 000     | Unlocks creator-token minting and pool admin nomination. |
-
-Thresholds are stored as contract instance-storage constants (`REP_TIER_1` … `REP_TIER_3`)
-so they can be updated via governance without a contract upgrade.
+- Post does not exist
+- Tipper is the post author
+- Either party has blocked the other
+- Cooldown has not expired
+- `tip_total` cap would be exceeded
+- Post author has no registered profile
 
 ---
 
-### 10.5 Reading Reputation via the SDK
+### Mechanism 2 — Analytics oracle attestation
 
-The SDK `LinkoraClient` does not yet have a first-class `getReputation` method. Until
-`packages/reputation/src/scorer.ts` is wired into the client, read the three keys by
-calling the contract view functions directly through `simulateCallOnContract`.
+The oracle pipeline lets an off-chain analytics service publish a signed report about a
+creator's activity (views, engagement, etc.). The contract verifies the Ed25519 signature,
+records a nullifier to prevent replay, and emits an event. Downstream reward distribution
+is handled off-chain by the indexer or a separate distribution service.
 
-#### Read score and tier for a single address
+#### Epoch definition
 
-```ts
-import { LinkoraClient } from "@linkora/sdk";
-import { scValToNative, nativeToScVal, Address } from "@stellar/stellar-base";
+An **epoch** is defined by the `window_start` and `window_end` Unix timestamps in the
+analytics report CBOR. The oracle computes this window off-chain based on its own scheduling
+logic (e.g., weekly or monthly). The contract validates only that the current ledger
+timestamp falls within the window.
 
-const client = new LinkoraClient({
-  contractId: "C...", // deployed contract address
-  rpcUrl: "https://soroban-testnet.stellar.org",
-  networkPassphrase: "Test SDF Network ; September 2015",
-});
+#### Distribution call
 
-const address = "GABC..."; // address to query
+**Function:** `verify_analytics_attestation(oracle_name, report_cbor, signature, creator, window_start, window_end) → bool`
 
-// Read the current score (returns i64, or null if no entry yet)
-const scoreVal = await client.simulateCallOnContract(client.contractId, "get_rep_score", [
-  nativeToScVal(Address.fromString(address)),
-]);
-const score: number = scoreVal ? Number(scValToNative(scoreVal)) : 0;
+| Parameter      | Type         | Description                                                                |
+| -------------- | ------------ | -------------------------------------------------------------------------- |
+| `oracle_name`  | `Symbol`     | Name of the oracle whose key is used for verification.                     |
+| `report_cbor`  | `Bytes`      | Raw CBOR-encoded analytics report.                                         |
+| `signature`    | `BytesN<64>` | Ed25519 signature of `sha256(report_cbor)` from the registered oracle key. |
+| `creator`      | `Address`    | Creator address this report is for.                                        |
+| `window_start` | `u64`        | Unix timestamp of the epoch start.                                         |
+| `window_end`   | `u64`        | Unix timestamp of the epoch end.                                           |
 
-// Read the cached tier (returns u32 0–3)
-const tierVal = await client.simulateCallOnContract(client.contractId, "get_rep_tier", [
-  nativeToScVal(Address.fromString(address)),
-]);
-const tier: number = tierVal ? Number(scValToNative(tierVal)) : 0;
+Returns `true` on successful verification.
 
-const TIER_LABELS = ["Newcomer", "Member", "Trusted", "Verified Creator"] as const;
-console.log(`Score: ${score}  Tier: ${TIER_LABELS[tier]}`);
+**Errors:**
+
+- Oracle not registered (`register_oracle` has not been called for `oracle_name`)
+- Signature verification fails
+- Current ledger timestamp is outside `[window_start, window_end]`
+- Attestation has already been submitted (nullifier replay)
+
+#### Claimable window
+
+The contract accepts an attestation only while the current ledger timestamp satisfies:
+
+```
+window_start ≤ ledger.timestamp() ≤ window_end
 ```
 
-#### Batch-read scores for a follower list
+Attestations submitted after `window_end` are rejected with `"attestation outside time
+window"`. This bounds the window during which the oracle must call the contract.
 
-```ts
-// addresses is string[] from client.getFollowers(myAddress)
-const addresses = await client.getFollowers(myAddress, 0, 50);
+#### Re-claim prevention
 
-const scores = await Promise.all(
-  addresses.map(async (addr) => {
-    const val = await client.simulateCallOnContract(client.contractId, "get_rep_score", [
-      nativeToScVal(Address.fromString(addr)),
-    ]);
-    return { address: addr, score: val ? Number(scValToNative(val)) : 0 };
-  })
-);
+Each attestation is identified by `sha256(report_cbor)`. The contract stores this hash as
+`AttestationNullifier(report_hash) → bool` in persistent storage. Any second call with the
+same `report_cbor` is rejected as `"attestation already submitted"`.
 
-scores.sort((a, b) => b.score - a.score);
-console.table(scores);
+---
+
+### Sequence diagram — oracle → attest → creator reward
+
+```
+Analytics Oracle         LinkoraContract           Indexer / Distribution
+      |                        |                           |
+      | -- register_oracle()-->|                           |
+      |    (admin, one-time)   |                           |
+      |                        |                           |
+      |  [epoch window opens]  |                           |
+      |                        |                           |
+      | -- verify_analytics_  |                           |
+      |    attestation() ----->|                           |
+      |    (report_cbor,       | store nullifier           |
+      |     signature,         | emit AttestationVerified  |
+      |     creator, window)   |  Event                    |
+      |                        |                           |
+      |    true /<-------------|                           |
+      |                        |                           |
+      |                        |-- AttestationVerified --->|
+      |                        |   Event (indexed)         |
+      |                        |                           |
+      |                        |         trigger off-chain |
+      |                        |         distribution      |
+      |                        |         (airdrop / pool   |
+      |                        |          deposit)         |
 ```
 
-> **Note:** `simulateCallOnContract` is a read-only simulation — it does not submit a
-> transaction and incurs no fees. All three reputation keys (`RepScore`, `RepLastDecay`,
-> `RepTier`) are readable without authentication.
-
 ---
 
-### 10.6 Off-chain Scorer
+### Admin-only functions
 
-The file `packages/reputation/src/scorer.ts` is the planned off-chain counterpart to the
-on-chain storage. It will:
+| Function                  | Required role | Description                                                  |
+| ------------------------- | ------------- | ------------------------------------------------------------ |
+| `register_oracle`         | `Admin`       | Registers (or rotates) an Ed25519 oracle public key by name. |
+| `set_fee`                 | `Admin`       | Updates the tip protocol fee in basis points.                |
+| `set_treasury`            | `Admin`       | Updates the treasury address that receives tip fees.         |
+| `set_tip_cooldown_window` | `Admin`       | Adjusts the per-tipper per-post cooldown in ledgers.         |
 
-1. Aggregate the same signals from the indexer's PostgreSQL tables (`post_scores`,
-   `follow_counts`, `tips`, `likes`) to compute an expected score without hitting the RPC.
-2. Detect drift between the off-chain estimate and the on-chain `RepScore` key and emit a
-   structured log event when they diverge beyond a configurable threshold.
-3. Expose a `computeScore(address: string): Promise<number>` function used by the indexer
-   feed-ranking pipeline.
+### Events emitted
 
-Until that file exists, callers should fall back to the contract read pattern in §10.5.
-
----
-
-### 10.7 Cross-references
-
-| Topic                             | Location                                                                       |
-| --------------------------------- | ------------------------------------------------------------------------------ |
-| StorageKey enum and TTL constants | `packages/contracts/contracts/linkora-contracts/src/lib.rs`                    |
-| Post scoring signals (indexer)    | `services/indexer/migrations/009_post_scores.sql`                              |
-| Follow count tables (indexer)     | `services/indexer/migrations/013_follow_counts.sql`                            |
-| Moderation slash logic            | `packages/contracts/contracts/linkora-contracts/src/lib.rs` — `resolve_report` |
-| Off-chain scorer (planned)        | `packages/reputation/src/scorer.ts`                                            |
-| SDK client patterns               | `packages/sdk/src/client.ts` — `simulateCallOnContract`                        |
-| Governance gating (tier 2+)       | §10.4 above; governed by `GovConfig` in `lib.rs`                               |
+| Event                      | Topics                       | Fields                                  | Emitted when                                  |
+| -------------------------- | ---------------------------- | --------------------------------------- | --------------------------------------------- |
+| `TipEvent`                 | `tipper`, `post_id`          | `amount`, `fee`                         | A tip is successfully sent.                   |
+| `AttestationVerifiedEvent` | `oracle_name`, `report_hash` | `creator`, `window_start`, `window_end` | An analytics attestation passes verification. |

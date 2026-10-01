@@ -1,11 +1,18 @@
-# Linkora — System Architecture
+# System Architecture
 
-This document describes the high-level component layout and data flows for
-the Linkora SocialFi platform.
+This document describes the major components of the Linkora platform and how they interact.
 
 ---
 
-## Component overview
+## Table of Contents
+
+1. [High-level overview](#1-high-level-overview)
+2. [Component breakdown](#2-component-breakdown)
+3. [DM encryption architecture](#3-dm-encryption-architecture)
+
+---
+
+## 1. High-level overview
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -17,130 +24,160 @@ the Linkora SocialFi platform.
 ┌──────────────────────┐   ┌─────────────────────────────────────┐
 │  SDK (packages/sdk)  │   │  Indexer (services/indexer)         │
 │  LinkoraClient       │   │  PostgreSQL · full-text search API  │
-│  TransactionQueue    │   └─────────────────────────────────────┘
-└──────────┬───────────┘                   │  REST / WebSocket
-           │                               ▼
+│  TransactionQueue    │   └──────────────┬──────────────────────┘
+└──────────┬───────────┘                  │ REST / WebSocket
+           │                              ▼
            │              ┌────────────────────────────────────┐
-           └─────────────►│  Web (apps/web) · Mobile (apps/mobile) │
+           └─────────────►│  Web (apps/web)                    │
+                          │  Mobile (apps/mobile)              │
                           │  Next.js 15 · Expo / React Native  │
                           └────────────────────────────────────┘
 ```
 
 ---
 
-## Web application route tree
+## 2. Component breakdown
 
-All routes live under `apps/web/src/app/` and follow the Next.js 15
-App Router convention. Each entry below lists the file-system path,
-the page component it renders, and a short description of its
-responsibility.
-
-### Core feed & discovery
-
-| Route | Component file | Responsibility |
-|---|---|---|
-| `/feed` | `app/feed/page.tsx` | Main home feed. Renders the Explore and Following tabs, real-time WebSocket indicator, infinite-scroll pagination, and the tipping modal. Uses `FeedFilters`, `FeedInfiniteScroll`, and `FeedSkeleton` from `components/feed/`. |
-| `/explore` | `app/explore/page.tsx` | Discover page. Surfaces trending posts, suggested creators, and tag-based exploration. |
-| `/search` | `app/search/page.tsx` → `SearchPageClient.tsx` | Full-text post and profile search backed by the indexer `/api/search` endpoint. |
-| `/posts/[id]` | `app/posts/[id]/page.tsx` | Single-post detail page with threaded replies and inline tipping. |
-
-### Profiles
-
-| Route | Component file | Responsibility |
-|---|---|---|
-| `/profile/[address]` | `app/profile/[address]/page.tsx` | Public profile page. Shows avatar, bio, creator token panel (`CreatorTokenPanel`), follower/following counts, and the author's post grid. |
-| `/profile/[address]/followers` | `app/profile/[address]/followers/page.tsx` | Paginated list of accounts that follow this profile. |
-| `/profile/[address]/following` | `app/profile/[address]/following/page.tsx` | Paginated list of accounts this profile follows. |
-| `/profile/edit` | `app/profile/edit/page.tsx` | Authenticated form to update display name, bio, and avatar. Writes to the contract via `buildSignAndSubmit`. |
-
-### Governance UI
-
-The governance section surfaces on-chain protocol proposals and lets
-token-holders cast votes or submit new parameter-change proposals.
-
-| Route | Component file | Responsibility |
-|---|---|---|
-| `/governance` | `app/governance/page.tsx` | Proposal list page. Tabs for **Active**, **Passed**, **Executed**, and **History**. Paginated at 10 proposals per page. Reads `GovProposal` objects from the contract via `LinkoraClient`. Connected wallet holders can also submit a new proposal from an inline form on this page. |
-| `/governance/new` | *(planned — inline form on `/governance` page)* | Separate creation page for new on-chain governance proposals. Will accept a `GovParameter` selector and a target value. Extracted from the inline form in `app/governance/page.tsx`. |
-| `/governance/[id]` | *(planned)* | Detail view for a single proposal. Shows full description, current vote tallies, quorum progress bar, and a **Vote** action button for eligible token holders. |
-
-**Key components:**
-
-- `app/governance/page.tsx` — uses `LinkoraClient` (from `linkora-sdk`) to call `get_proposal`, `cast_vote`, and `create_proposal` contract functions.
-- `GovParameter`, `GovProposal`, `GovStatus` — type re-exports from `packages/sdk/src/`.
-
-### Creator dashboard
-
-The creator section gives authors visibility into earnings, audience
-growth, and their deployed creator token.
-
-| Route | Component file | Responsibility |
-|---|---|---|
-| `/creator` | *(planned)* | Creator hub landing page. Entry point for earnings, audience, and token management. |
-| `/creator/earnings` | *(planned)* | Displays cumulative tip income and pool distributions. Pulls data from the indexer analytics endpoints. |
-| `/creator/audience` | *(planned)* | Follower growth chart, top followers by tip volume, and audience breakdown. Backed by the analytics-oracle service. |
-| `/creator/tokens` | *(planned)* | Creator token management. Shows supply, holders, and provides a direct link to the token-launch wizard at `/onboarding/creator`. |
-| `/onboarding/creator` | `app/onboarding/creator/page.tsx` → `CreatorTokenWizard.tsx` | Multi-step SEP-41 creator token deployment wizard (`StepTokenDetails` → `StepReviewFees` → `StepDeploy` → `StepSuccess`). |
-
-**Key components:**
-
-- `components/profile/CreatorTokenPanel.tsx` — inline panel shown on the public profile page with token price and holder count.
-- `app/onboarding/creator/CreatorTokenWizard.tsx` — orchestrates the four deployment steps.
-
-### Pools & DeFi
-
-| Route | Component file | Responsibility |
-|---|---|---|
-| `/pools` | `app/pools/page.tsx` | Community pool list with deposit / withdrawal summaries and pool health badges. |
-| `/pools/new` | `app/pools/new/page.tsx` | Pool creation form. Configures threshold, token, admins, and description before deploying via the contract. |
-| `/pools/[id]` | `app/pools/[id]/page.tsx` | Pool detail page. Deposit and withdrawal tabs, admin list, transaction status banner, and on-chain analytics link. |
-| `/pools/[id]/analytics` | `app/pools/[id]/analytics/page.tsx` | Historical deposit / withdrawal chart for a single pool. |
-
-### Direct messages
-
-| Route | Component file | Responsibility |
-|---|---|---|
-| `/dm` | `app/dm/page.tsx` | Conversation inbox. Lists all DM threads for the connected address, ordered by last activity. |
-| `/dm/[address]` | `app/dm/[address]/page.tsx` | End-to-end encrypted message thread. Uses the `dm-relay` service and the ECDH key pair stored in `DmKeySection`. |
-
-### Analytics
-
-| Route | Component file | Responsibility |
-|---|---|---|
-| `/analytics` | `app/analytics/page.tsx` | Platform-wide analytics dashboard. Post volume, tip totals, active wallets, and top creators. Reads from the analytics-oracle service. |
-
-### Settings & onboarding
-
-| Route | Component file | Responsibility |
-|---|---|---|
-| `/settings` | `app/settings/page.tsx` | User settings page. Hosts `ProfileSection`, `WalletSection`, `NotificationsSection`, `DmKeySection`, `GovernanceSection`, `BlockListSection`, and `DangerZoneSection`. |
-| `/onboarding` | `app/onboarding/page.tsx` | Onboarding entry point. Wrapped by `OnboardingGuard`; redirects to the `OnboardingWizard` flow for new users. |
-| `/notifications` | `app/notifications/page.tsx` | Notification centre. Lists follow, tip, and governance events. Backed by `useNotifications` and the indexer's `sent_notifications` table. |
-| `/dashboard` | `app/dashboard/page.tsx` | Creator / admin dashboard. Shows `DashboardHeader`, `LeftSidebar`, `DashboardPostGrid`, and `RightSidebar`. |
+| Component        | Path                        | Role                                                                              |
+| ---------------- | --------------------------- | --------------------------------------------------------------------------------- |
+| Smart contract   | `packages/contracts`        | On-chain state: profiles, posts, tips, pools, governance, moderation              |
+| SDK              | `packages/sdk`              | Typed TypeScript client; wraps XDR encoding, transaction queuing, DM crypto       |
+| Indexer          | `services/indexer`          | Listens for Stellar events, stores them in PostgreSQL, exposes REST/WS search API |
+| DM relay         | `services/dm-relay`         | Routes ciphertext between users; never sees plaintext                             |
+| Analytics oracle | `services/analytics-oracle` | Aggregates off-chain engagement signals and submits them on-chain                 |
+| Web              | `apps/web`                  | Next.js 15 frontend                                                               |
+| Mobile           | `apps/mobile`               | Expo / React Native app                                                           |
+| Mini apps        | `examples/mini-apps`        | Third-party apps embedded in the shell via the Bridge API                         |
 
 ---
 
-## Service layer
+## 3. DM encryption architecture
 
-| Service | Directory | Description |
-|---|---|---|
-| Indexer | `services/indexer/` | Ingests Stellar contract events, writes to PostgreSQL, exposes a REST + WebSocket API. Migration numbering: `001`–`015` currently applied; `016`–`019` planned. |
-| DM Relay | `services/dm-relay/` | Stores and forwards E2EE direct messages. Validates sender keys on arrival; recipients poll or subscribe via WebSocket. |
-| Analytics Oracle | `services/analytics-oracle/` | Aggregates on-chain events into time-series metrics. Feeds the `/analytics` page and the `creator/earnings` and `creator/audience` routes. |
+Linkora's direct messages are end-to-end encrypted (E2EE). The relay service (`services/dm-relay`) routes opaque ciphertext and is architecturally prevented from reading message content. Encryption and decryption happen exclusively in the client (SDK).
 
----
+### Cryptographic primitives
 
-## Data flow summary
+| Primitive                | Algorithm             | Library                 |
+| ------------------------ | --------------------- | ----------------------- |
+| Key agreement            | X25519 Diffie-Hellman | `@noble/curves/ed25519` |
+| Key derivation           | HKDF-SHA256           | `@noble/hashes/hkdf`    |
+| Authenticated encryption | ChaCha20-Poly1305     | `@noble/ciphers/chacha` |
+
+Implemented in [`packages/sdk/src/dm/crypto.ts`](../packages/sdk/src/dm/crypto.ts).
+
+### End-to-end message flow
 
 ```
-Browser / Mobile
-  │
-  ├─► Next.js API Routes (/api/*)    ← server-side proxies for indexer
-  │
-  ├─► Indexer REST / WS              ← off-chain post, profile, follow data
-  │
-  ├─► DM Relay WebSocket             ← encrypted message delivery
-  │
-  └─► Soroban RPC (via SDK)          ← on-chain writes (posts, tips, votes,
-                                        pool actions, token deploys)
+Sender                        Relay (dm-relay)              Recipient
+  │                                  │                           │
+  │  1. generateDmKeypair()          │                           │
+  │     → X25519 key pair            │                           │
+  │                                  │                           │
+  │  2. publishDmKey(pubKey)         │                           │
+  │     → on-chain via contract ─────────────────────────────────│──► stored in contract
+  │                                  │                           │
+  │  3. getDmKey(recipientAddr)      │                           │    (recipient did the same)
+  │     ← recipient's pubKey ◄───────────────────────────────────│
+  │                                  │                           │
+  │  4. deriveSharedSecret(          │                           │
+  │       myPrivKey, theirPubKey)    │                           │
+  │     → X25519 shared secret       │                           │
+  │                                  │                           │
+  │  5. deriveConversationKey(       │                           │
+  │       sharedSecret, convId)      │                           │
+  │     → HKDF 32-byte key           │                           │
+  │                                  │                           │
+  │  6. encryptMessage(              │                           │
+  │       key, plaintext, idx)       │                           │
+  │     → ChaCha20-Poly1305          │                           │
+  │       ciphertext                 │                           │
+  │                                  │                           │
+  │  7. sendMessage(ciphertext) ────►│                           │
+  │     (Stellar-signed HTTP POST)   │  stores ciphertext        │
+  │                                  │  never decrypts           │
+  │                                  │                           │
+  │                                  │──► WebSocket push ───────►│
+  │                                  │    or HTTP poll           │
+  │                                  │                           │
+  │                                  │         8. getMessages() ►│
+  │                                  │◄── ciphertext array ──────│
+  │                                  │                           │
+  │                                  │    9. getDmKey(senderAddr)│
+  │                                  │◄──────────────────────────│──► from contract
+  │                                  │                           │
+  │                                  │   10. deriveSharedSecret( │
+  │                                  │         myPrivKey,        │
+  │                                  │         senderPubKey)     │
+  │                                  │                           │
+  │                                  │   11. decryptMessage(     │
+  │                                  │         key, ciphertext,  │
+  │                                  │         idx)              │
+  │                                  │       → plaintext         │
 ```
+
+### Key registration
+
+1. Each user calls `generateDmKeypair()` (in `packages/sdk/src/dm/crypto.ts`) to create an X25519 key pair. DM keys are **separate** from Stellar signing keys.
+2. The public key is published on-chain via `publishDmKey(address, publicKey)` on the Linkora contract. This makes it discoverable by any other user without a central key server.
+3. Before sending or receiving messages, both parties call `getDmKey(address)` to fetch each other's public key from the contract.
+
+### Shared secret derivation
+
+Both sender and recipient independently compute the same shared secret using X25519:
+
+```
+sharedSecret = X25519(myPrivateKey, theirPublicKey)
+```
+
+Because X25519 is commutative, both parties arrive at the same value without exchanging the secret itself. A per-conversation key is then derived with HKDF:
+
+```
+conversationKey = HKDF-SHA256(sharedSecret, info="linkora-dm-v1:<conversationId>")
+```
+
+where `conversationId` is `SHA256(sort([addressA, addressB]).join(""))` — deterministic and direction-independent.
+
+### Per-message nonces
+
+To prevent nonce reuse without requiring synchronisation, each message's 12-byte ChaCha20 nonce is derived from the conversation key and the message index:
+
+```
+nonce = HKDF-SHA256(conversationKey, info="nonce:<messageIndex>", length=12)
+```
+
+The message index is an application-level counter that increases monotonically within a conversation. Nonce reuse for the same conversation key would break the authenticated encryption guarantee, so correct index management is critical.
+
+### Relay authentication
+
+The relay rejects unauthenticated submissions. Every message `POST` must carry a Stellar-signed auth payload (`services/dm-relay/src/auth.ts`):
+
+```
+authMessage = SHA256("<to>:<nonce>:<timestamp>")
+signature   = Ed25519_sign(senderPrivateKey, authMessage)
+```
+
+The relay verifies the signature and enforces a 30-second timestamp window to prevent replay attacks. A per-signature replay cache is maintained in memory for the duration of the skew window.
+
+### Key rotation
+
+Key rotation is not yet fully implemented. The planned flow is:
+
+1. The user generates a new X25519 key pair and publishes it on-chain, overwriting the old public key.
+2. The SDK's `detectKeyRotation()` function (in `packages/sdk/src/dm/relay.ts`) checks whether the on-chain public key differs from the key used to encrypt previous messages. If a rotation is detected, the client fetches the new key and uses it for subsequent messages.
+3. Messages encrypted under the old key remain readable as long as the old private key is retained locally.
+
+### Forward secrecy
+
+The current scheme does **not** provide forward secrecy: the static X25519 key pair is long-lived, so an attacker who obtains a user's DM private key can decrypt all past messages they have access to.
+
+Forward secrecy is planned for a future protocol version using a Double Ratchet or similar mechanism layered on top of the existing HKDF derivation.
+
+### Code references
+
+| Concern                                              | File                                                                    |
+| ---------------------------------------------------- | ----------------------------------------------------------------------- |
+| Key generation, HKDF derivation, encrypt/decrypt     | [`packages/sdk/src/dm/crypto.ts`](../packages/sdk/src/dm/crypto.ts)     |
+| Relay HTTP client, WebSocket, key rotation detection | [`packages/sdk/src/dm/relay.ts`](../packages/sdk/src/dm/relay.ts)       |
+| High-level `DmService` (key publish, send, receive)  | [`packages/sdk/src/dm/index.ts`](../packages/sdk/src/dm/index.ts)       |
+| Relay server: Stellar signature verification         | [`services/dm-relay/src/auth.ts`](../services/dm-relay/src/auth.ts)     |
+| Relay server: message routes                         | [`services/dm-relay/src/routes.ts`](../services/dm-relay/src/routes.ts) |

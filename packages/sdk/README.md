@@ -119,262 +119,106 @@ If you attempt to sign and submit this XDR directly, the network will reject it 
 
 ---
 
-## ProfileClient — profile methods
+## TipClient
 
-All profile operations are available directly on the `LinkoraClient` instance. There is no
-separate `ProfileClient` class — the methods are part of `LinkoraClient`, which extends the
-generated base client.
+Tipping operations are exposed directly on `LinkoraClient`. The protocol charges a fee in basis points (bps) on every tip, deducted from the tip amount before the remainder reaches the post author.
+
+### Methods
+
+| Method                                                     | Type                  | Description                                                |
+| ---------------------------------------------------------- | --------------------- | ---------------------------------------------------------- |
+| `tip(tipper, postId, token, amount)`                       | Write (throwaway XDR) | Builds a `tip` operation XDR                               |
+| `prepareTipTx(tipper, postId, token, amount, horizonUrl?)` | Write (submittable)   | Fetches real sequence, simulates, returns wallet-ready XDR |
+| `getFeeBps()`                                              | Read                  | Returns the current protocol fee in basis points           |
+| `setFee(feeBps)`                                           | Write (throwaway XDR) | Admin: set the protocol fee (e.g. `150` = 1.5%)            |
+| `getTipCooldownWindow()`                                   | Read                  | Returns the tip cooldown in ledgers                        |
+| `setTipCooldownWindow(cooldownLedgers)`                    | Write (throwaway XDR) | Admin: set the tip cooldown window                         |
+
+> **Note:** The SDK does not expose a `getTipTotals` method — cumulative tip totals per post are maintained by the indexer in the `posts.tip_total` column and returned in feed and search responses. Query them via the indexer's search or feed endpoints.
+
+### Fee split explanation
+
+When a user tips `amount` stroops of `token`:
+
+1. The contract reads the current `feeBps` (settable by admin via `setFee`).
+2. Protocol fee = `floor(amount × feeBps / 10000)`.
+3. The protocol fee is transferred to the `treasury` address.
+4. The remaining `amount − fee` is credited to the post author.
+
+```
+tip amount = 1,000,000 stroops
+feeBps     = 200 (2%)
+fee        = 20,000 stroops → treasury
+payout     = 980,000 stroops → post author
+```
+
+A `feeBps` of `0` means no fee is charged.
+
+### getTipTotals — time-range parameters
+
+Cumulative tip totals are available from the indexer. The `/api/search` endpoint and `/api/feed` responses include a `tip_total` field per post (sum of all tip payouts since the post was indexed).
+
+For time-range breakdowns, query the `tips` table directly or use the indexer search endpoint with the `from` / `to` date parameters:
+
+| Parameter | Type                 | Description                          |
+| --------- | -------------------- | ------------------------------------ |
+| `from`    | ISO 8601 date string | Start of the time window (inclusive) |
+| `to`      | ISO 8601 date string | End of the time window (inclusive)   |
+
+```bash
+# Tips received on a post within a date range
+GET /api/search?q=&from=2024-01-01&to=2024-12-31
+```
+
+### Examples
+
+#### sendTip — throwaway XDR (server-side queue)
 
 ```ts
 import { LinkoraClient } from "linkora-sdk";
 
 const client = new LinkoraClient({
-  contractId: "CCNZILBYJQBX...",
+  contractId: "CXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
   rpcUrl: "https://soroban-testnet.stellar.org",
-  networkPassphrase: "Test SDF Network ; September 2015",
 });
-```
 
----
-
-### `getProfile(address)`
-
-Fetch a user profile by Stellar address.
-
-**Signature:**
-
-```ts
-getProfile(address: string): Promise<Profile | null>
-```
-
-**Parameters:**
-
-| Name      | Type     | Description                            |
-| --------- | -------- | -------------------------------------- |
-| `address` | `string` | Stellar public key (`G…`) of the user. |
-
-**Returns:** `Promise<Profile | null>` — the `Profile` object, or `null` if the profile
-does not exist or has expired (storage rent unpaid).
-
-**Errors thrown:**
-
-| Error class         | When                                                             |
-| ------------------- | ---------------------------------------------------------------- |
-| `InvalidInputError` | `address` is not a valid Stellar public key or contract address. |
-| `NetworkError`      | RPC request failed.                                              |
-| `SimulationError`   | Contract simulation failed for an unexpected reason.             |
-
-**Example:**
-
-```ts
-const profile = await client.getProfile("GBFOY2LJQZ...");
-if (profile) {
-  console.log(`Username: ${profile.username}`);
-  console.log(`Creator token: ${profile.creator_token}`);
-} else {
-  console.log("Profile not found.");
-}
-```
-
----
-
-### `setProfile(user, username, creatorToken)`
-
-Build a `set_profile` transaction XDR. Creates a new profile or updates an existing one.
-
-> **Note:** This method returns a base64 XDR string built with a throwaway keypair. It is
-> not directly submittable. Pass the result to `TransactionQueue` or use
-> `prepareTransaction` to build a submittable envelope.
-
-**Signature:**
-
-```ts
-setProfile(user: string, username: string, creatorToken: string): string
-```
-
-**Parameters:**
-
-| Name           | Type     | Description                                                               |
-| -------------- | -------- | ------------------------------------------------------------------------- |
-| `user`         | `string` | Stellar public key of the profile owner. Must be the transaction signer.  |
-| `username`     | `string` | Unique display name (1–50 characters). Must not be taken by another user. |
-| `creatorToken` | `string` | Contract ID of the user's SEP-41 creator token.                           |
-
-**Returns:** `string` — base64-encoded transaction XDR (throwaway source, not directly submittable).
-
-**Errors thrown:**
-
-| Error class         | When                                                                     |
-| ------------------- | ------------------------------------------------------------------------ |
-| `InvalidInputError` | `user` or `creatorToken` is not a valid address, or `username` is empty. |
-| `ValidationError`   | `username` or `creatorToken` fails format validation.                    |
-
-**Example:**
-
-```ts
-// Build the XDR and enqueue it for submission
-const xdr = client.setProfile("GBFOY2LJQZ...", "alice", "CABC123DEF...");
-
-queue.enqueue(xdr);
-await queue.run();
-```
-
-**Submittable variant:** If you need a fully prepared transaction (with correct sequence
-number and footprint), use `prepareTransaction` directly:
-
-```ts
-const sourceAccount = await client.getAccountForTx("GBFOY2LJQZ...");
-const tx = await client.prepareTransaction(
-  "set_profile",
-  sourceAccount
-  // scvAddress, scvString, scvAddress for user/username/creatorToken
+// Tip the author of post #42 with 5 XLM (50,000,000 stroops)
+const opXdr = client.tip(
+  "GBFOY...", // tipper
+  42n, // postId
+  "CTOKEN...", // token contract address (e.g. XLM wrapped SEP-41)
+  50_000_000n // amount in stroops
 );
-const xdrEnvelope = tx.toEnvelope().toXDR("base64");
-// Sign xdrEnvelope with your wallet and submit
+console.log("Tip Op XDR:", opXdr);
 ```
 
----
-
-### `deleteProfile(user)`
-
-Build a `delete_profile` transaction XDR. Deletes the caller's profile and places a
-tombstone for lazy storage cleanup.
-
-**Signature:**
+#### prepareTipTx — wallet-ready transaction
 
 ```ts
-deleteProfile(user: string): string
+const txXdr = await client.prepareTipTx(
+  "GBFOY...", // tipper
+  42n, // postId
+  "CTOKEN...", // token contract address
+  50_000_000n // amount in stroops
+);
+// Pass txXdr to Freighter or another Stellar wallet for signing
 ```
 
-**Parameters:**
-
-| Name   | Type     | Description                              |
-| ------ | -------- | ---------------------------------------- |
-| `user` | `string` | Stellar public key of the profile owner. |
-
-**Returns:** `string` — base64-encoded transaction XDR (throwaway source, not directly submittable).
-
-**Errors thrown:**
-
-| Error class         | When                                   |
-| ------------------- | -------------------------------------- |
-| `InvalidInputError` | `user` is not a valid Stellar address. |
-
-**Example:**
+#### Check current fee and simulate net payout
 
 ```ts
-const xdr = client.deleteProfile("GBFOY2LJQZ...");
-queue.enqueue(xdr);
-await queue.run();
+const feeBps = await client.getFeeBps(); // e.g. 200
+const amount = 50_000_000n;
+const fee = (amount * BigInt(feeBps)) / 10_000n;
+const payout = amount - fee;
+console.log(`Fee: ${fee} stroops, Creator receives: ${payout} stroops`);
 ```
 
----
-
-### `getProfileCount()`
-
-Get the total number of profiles ever registered. This counter is never decremented on
-profile deletion.
-
-**Signature:**
+#### Query tip totals for a post from the indexer
 
 ```ts
-getProfileCount(): Promise<bigint>
-```
-
-**Returns:** `Promise<bigint>` — cumulative profile creation count.
-
-**Example:**
-
-```ts
-const count = await client.getProfileCount();
-console.log(`Total registered users: ${count.toString()}`);
-```
-
----
-
-### `getAddressByUsername(username)`
-
-Resolve a username to its owner's Stellar address. Use this to look up profiles by name.
-
-> **Note:** The contract does not expose a full-text search endpoint. For searching
-> profiles by partial username, use the indexer's REST API instead.
-
-**Signature:**
-
-```ts
-getAddressByUsername(username: string): Promise<string | null>
-```
-
-**Parameters:**
-
-| Name       | Type     | Description                                     |
-| ---------- | -------- | ----------------------------------------------- |
-| `username` | `string` | The exact username to look up (case-sensitive). |
-
-**Returns:** `Promise<string | null>` — the owner's Stellar public key, or `null` if the
-username is not registered.
-
-**Errors thrown:**
-
-| Error class         | When                                          |
-| ------------------- | --------------------------------------------- |
-| `InvalidInputError` | `username` is empty or exceeds 50 characters. |
-| `NetworkError`      | RPC request failed.                           |
-
-**Example:**
-
-```ts
-// Look up by username, then fetch the full profile
-const address = await client.getAddressByUsername("alice");
-if (address) {
-  const profile = await client.getProfile(address);
-  console.log(`alice's address: ${address}`);
-  console.log(`Creator token: ${profile?.creator_token}`);
-} else {
-  console.log("Username not found.");
-}
-```
-
----
-
-### `Profile` type
-
-```ts
-interface Profile {
-  address: string; // Stellar public key of the owner
-  username: string; // Unique display name
-  creator_token: string; // Contract ID of the creator's SEP-41 token
-}
-```
-
----
-
-### Error types reference
-
-All profile methods throw errors from the SDK error hierarchy. The most common ones:
-
-| Class               | Code                | When                                                     |
-| ------------------- | ------------------- | -------------------------------------------------------- |
-| `InvalidInputError` | `INVALID_INPUT`     | Bad address format, empty string, or out-of-range value. |
-| `ValidationError`   | `VALIDATION_ERROR`  | Structural validation failed (e.g., wrong type).         |
-| `NotFoundError`     | `NOT_FOUND`         | Profile, username, or resource does not exist on-chain.  |
-| `NetworkError`      | `NETWORK_ERROR`     | RPC connection or timeout failure.                       |
-| `SimulationError`   | `SIMULATION_FAILED` | Contract simulation returned an error.                   |
-
-Import them from `linkora-sdk`:
-
-```ts
-import { NotFoundError, InvalidInputError, NetworkError, SimulationError } from "linkora-sdk";
-
-try {
-  const profile = await client.getProfile("GBFOY2...");
-} catch (err) {
-  if (err instanceof NotFoundError) {
-    console.log("Profile does not exist.");
-  } else if (err instanceof NetworkError) {
-    console.log("RPC unavailable, try again later.");
-  } else {
-    throw err;
-  }
-}
+const response = await fetch("https://indexer.linkora.example/api/feed?limit=1&viewer=GBFOY...");
+const { posts } = await response.json();
+const post = posts[0];
+console.log(`Post #${post.id} has received ${post.tip_total} stroops in tips`);
 ```

@@ -1,164 +1,263 @@
-# Linkora Mini App Bridge API
+# Bridge API Reference
 
-The Bridge is the communication layer between a mini app (running in an isolated WebView) and the Linkora host application. All bridge calls are gated by permissions declared in the mini app manifest.
+The Linkora Bridge is the communication channel between the host shell (web or mobile) and a mini-app running in a sandboxed iframe. The shell injects `window.LinkoraBridge` and dispatches a `linkora:ready` message event once the handshake is complete.
 
----
-
-## Permissions Reference
-
-Mini apps must declare every permission they require in the `permissions` array of their `linkora-manifest.json`. Undeclared permissions are rejected at call time with a `PermissionDenied` error — the host never prompts the user for a permission that was not declared in the manifest.
-
-### Permission Table
-
-| Permission               | Capability Granted                                                                   | User Consent Prompt                                            | Explicit Approval Required |
-| ------------------------ | ------------------------------------------------------------------------------------ | -------------------------------------------------------------- | -------------------------- |
-| `wallet.getAddress`      | Read the connected Stellar account address                                           | None — silent read, no prompt shown                            | No                         |
-| `wallet.sign`            | Sign arbitrary data with the connected wallet key                                    | "Allow **\<app name\>** to sign data with your wallet?"        | **Yes**                    |
-| `wallet.signTransaction` | Sign and submit a Stellar/Soroban transaction XDR                                    | "Allow **\<app name\>** to sign and submit a transaction?"     | **Yes**                    |
-| `profile.read`           | Read the authenticated user's public profile (address, username, creator token flag) | None — silent read, no prompt shown                            | No                         |
-| `profile.update`         | Write changes to the authenticated user's profile                                    | "Allow **\<app name\>** to update your Linkora profile?"       | **Yes**                    |
-| `post.create`            | Open a native post-creation sheet pre-filled with app-provided content               | Post confirmation sheet is shown; user may edit before posting | **Yes** (via sheet)        |
-
-> **Note on `profile.read` vs `profile.get`:** Internally the bridge maps the `profile.get` method call to the `profile.read` permission check. Declare `profile.read` in your manifest; call `bridge.profile.get()` in your code.
+All methods return Promises and reject with a structured error object (`{ code, message }`) on failure.
 
 ---
 
-## Permissions Requiring Explicit User Approval
+## Table of Contents
 
-The following permissions trigger a native approval sheet in the host app before the call is executed. The user must actively confirm or cancel each request; there is no way to suppress this prompt.
-
-- `wallet.sign`
-- `wallet.signTransaction`
-- `profile.update`
-- `post.create` — approval is embedded in the post confirmation sheet
-
-If the user rejects the prompt, the bridge rejects the promise with a `BridgeError` whose `code` is `"UserRejected"`.
-
----
-
-## Error Codes
-
-| Code                | Meaning                                                               |
-| ------------------- | --------------------------------------------------------------------- |
-| `PermissionDenied`  | The method was called without the required permission in the manifest |
-| `UserRejected`      | The user dismissed or cancelled the approval sheet                    |
-| `MethodUnavailable` | No handler is registered for the requested method                     |
+1. [Initialisation](#1-initialisation)
+2. [wallet.getAddress](#2-walletgetaddress)
+3. [wallet.signTransaction](#3-walletsigntransaction)
+4. [profile.getProfile](#4-profilegetprofile)
+5. [post.createPost](#5-postcreatepost)
+6. [Error codes](#6-error-codes)
+7. [TypeScript types](#7-typescript-types)
 
 ---
 
-## Example Manifests
+## 1. Initialisation
 
-### Tip Jar — wallet signing only
-
-A mini app that reads the user's address and signs a tipping transaction needs only the two wallet permissions.
-
-```json
-{
-  "name": "Tip Jar",
-  "version": "1.0.0",
-  "description": "Tip any Linkora post with XLM using your connected wallet.",
-  "entry": "index.html",
-  "permissions": ["wallet.getAddress", "wallet.signTransaction"],
-  "minSdkVersion": "1.0.0"
-}
-```
-
-### Creator Token — profile + wallet
-
-A mini app that displays the creator's profile and lets the user pay with a creator token.
-
-```json
-{
-  "name": "Creator Token",
-  "version": "1.0.0",
-  "description": "View a creator token balance and tip with the creator token.",
-  "entry": "index.html",
-  "permissions": ["profile.read", "wallet.getAddress", "wallet.signTransaction"],
-  "minSdkVersion": "1.0.0"
-}
-```
-
-### Social Poster — post creation
-
-A mini app that composes and submits posts on behalf of the user.
-
-```json
-{
-  "name": "Social Poster",
-  "version": "1.0.0",
-  "description": "Compose and schedule Linkora posts from a third-party tool.",
-  "entry": "index.html",
-  "permissions": ["profile.read", "post.create"],
-  "minSdkVersion": "1.0.0"
-}
-```
-
-### Full Access — all permissions
-
-A mini app that uses every available bridge capability.
-
-```json
-{
-  "name": "Full Access App",
-  "version": "1.0.0",
-  "description": "Demonstrates every bridge permission.",
-  "entry": "index.html",
-  "permissions": [
-    "wallet.getAddress",
-    "wallet.sign",
-    "wallet.signTransaction",
-    "profile.read",
-    "profile.update",
-    "post.create"
-  ],
-  "minSdkVersion": "1.0.0"
-}
-```
-
----
-
-## Bridge Call Flow
-
-```
-Mini app calls bridge.wallet.signTransaction(xdr)
-         │
-         ▼
-Host checks: is "wallet.signTransaction" in manifest.permissions?
-         │ No  → throw BridgeError("PermissionDenied")
-         │ Yes ↓
-         ▼
-Host presents native approval sheet to user
-         │ Rejected → throw BridgeError("UserRejected")
-         │ Approved ↓
-         ▼
-Host signs XDR and returns { signedXdr }
-         │
-         ▼
-Mini app receives signed XDR string
-```
-
----
-
-## TypeScript Types
-
-The bridge permission type is exported from `apps/mobile/mini-apps/permissions.ts`:
+The bridge is not available immediately when the iframe loads. Always wait for the `linkora:ready` message before calling any method.
 
 ```ts
-export type BridgePermission =
-  | "wallet.getAddress"
-  | "wallet.sign"
-  | "wallet.signTransaction"
-  | "profile.get"
-  | "profile.read"
-  | "profile.update"
-  | "post.create";
+window.addEventListener("message", (event) => {
+  if (event.data?.type === "linkora:ready") {
+    // LinkoraBridge is now available
+    init();
+  }
+});
 
-export type BridgeErrorCode = "PermissionDenied" | "UserRejected" | "MethodUnavailable";
+async function init() {
+  const address = await LinkoraBridge.wallet.getAddress();
+  console.log("Connected wallet:", address);
+}
+```
+
+Calling a Bridge method before `linkora:ready` rejects with `BRIDGE_NOT_READY`.
+
+---
+
+## 2. wallet.getAddress
+
+Returns the Stellar public key of the wallet currently connected in the Linkora shell.
+
+**Permission required:** `wallet.read`
+
+**Signature:**
+
+```ts
+LinkoraBridge.wallet.getAddress(): Promise<string>
+```
+
+**Returns:** The G-address string (56-character Stellar public key).
+
+**Rejects with:**
+
+| Code                   | Condition                                  |
+| ---------------------- | ------------------------------------------ |
+| `WALLET_NOT_CONNECTED` | No wallet is connected in the parent shell |
+| `PERMISSION_DENIED`    | Manifest does not declare `wallet.read`    |
+
+**Example:**
+
+```ts
+const address = await LinkoraBridge.wallet.getAddress();
+// "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
 ```
 
 ---
 
-## Related
+## 3. wallet.signTransaction
 
-- [Mini Apps Developer Guide](./DEVELOPER_GUIDE.md) — how to build and submit a mini app
-- [Manifest Schema](./manifest.schema.json) — JSON Schema for `linkora-manifest.json`
+Presents a Soroban transaction XDR to the user for review and signing. The user sees a human-readable summary in the shell's signing modal and can approve or decline.
+
+**Permission required:** `wallet.sign`
+
+**Signature:**
+
+```ts
+LinkoraBridge.wallet.signTransaction(xdr: string): Promise<string>
+```
+
+**Parameters:**
+
+| Parameter | Type     | Description                                                           |
+| --------- | -------- | --------------------------------------------------------------------- |
+| `xdr`     | `string` | Base64-encoded Stellar transaction XDR (unsigned or partially signed) |
+
+**Returns:** The signed transaction XDR as a Base64 string, ready to submit to the Stellar network.
+
+**Rejects with:**
+
+| Code                   | Condition                                           |
+| ---------------------- | --------------------------------------------------- |
+| `USER_CANCELLED`       | User dismissed the signing modal without approving  |
+| `PERMISSION_DENIED`    | Manifest does not declare `wallet.sign`             |
+| `INVALID_XDR`          | The provided string is not valid Base64-encoded XDR |
+| `WALLET_NOT_CONNECTED` | No wallet is connected                              |
+
+**Example:**
+
+```ts
+// Build the transaction XDR using the Linkora SDK or Stellar SDK
+const xdr = buildTipTransaction(postId, amountStroops);
+
+try {
+  const signedXdr = await LinkoraBridge.wallet.signTransaction(xdr);
+  // Submit the signed transaction via Horizon or Soroban RPC
+  await submitTransaction(signedXdr);
+} catch (err) {
+  if (err.code === "USER_CANCELLED") {
+    showMessage("Transaction cancelled");
+  } else {
+    showMessage(`Error: ${err.message}`);
+  }
+}
+```
+
+---
+
+## 4. profile.getProfile
+
+Returns the on-chain profile of the currently connected user.
+
+**Permission required:** `profile.read`
+
+**Signature:**
+
+```ts
+LinkoraBridge.profile.getProfile(): Promise<Profile>
+```
+
+**Returns:** A `Profile` object (see [§7 TypeScript types](#7-typescript-types)).
+
+**Rejects with:**
+
+| Code                   | Condition                                |
+| ---------------------- | ---------------------------------------- |
+| `WALLET_NOT_CONNECTED` | No wallet is connected                   |
+| `PERMISSION_DENIED`    | Manifest does not declare `profile.read` |
+
+**Example:**
+
+```ts
+const profile = await LinkoraBridge.profile.getProfile();
+console.log(`Hello, ${profile.displayName}! You have ${profile.followerCount} followers.`);
+```
+
+---
+
+## 5. post.createPost
+
+Opens the Linkora post composer pre-filled with a draft. The user reviews and submits the post themselves — the mini-app cannot publish on their behalf.
+
+**Permission required:** `post.create`
+
+**Signature:**
+
+```ts
+LinkoraBridge.post.createPost(draft: PostDraft): Promise<void>
+```
+
+**Parameters:**
+
+| Parameter             | Type     | Required | Description                                      |
+| --------------------- | -------- | -------- | ------------------------------------------------ |
+| `draft.text`          | `string` | —        | Pre-filled body text (max 500 characters)        |
+| `draft.mediaUrl`      | `string` | —        | HTTPS URL to an image or video to attach         |
+| `draft.replyToPostId` | `number` | —        | Pre-fill the composer as a reply to this post ID |
+
+**Returns:** `void`. Resolves when the composer is opened (not when the post is published).
+
+**Rejects with:**
+
+| Code                   | Condition                                |
+| ---------------------- | ---------------------------------------- |
+| `USER_CANCELLED`       | User closed the composer without posting |
+| `PERMISSION_DENIED`    | Manifest does not declare `post.create`  |
+| `WALLET_NOT_CONNECTED` | No wallet is connected                   |
+
+**Example:**
+
+```ts
+await LinkoraBridge.post.createPost({
+  text: "Just tipped this post via Tip Jar! 🫙",
+  replyToPostId: 42,
+});
+```
+
+---
+
+## 6. Error codes
+
+All Bridge rejections carry this shape:
+
+```ts
+interface BridgeError {
+  code: BridgeErrorCode;
+  message: string;
+}
+```
+
+| Code                   | Description                                                            |
+| ---------------------- | ---------------------------------------------------------------------- |
+| `BRIDGE_NOT_READY`     | A method was called before the `linkora:ready` event fired             |
+| `PERMISSION_DENIED`    | The manifest does not declare the required permission                  |
+| `WALLET_NOT_CONNECTED` | No wallet is connected in the parent shell                             |
+| `USER_CANCELLED`       | The user dismissed a signing modal or composer                         |
+| `INVALID_XDR`          | The XDR passed to `signTransaction` is not valid                       |
+| `UNKNOWN_ERROR`        | An unexpected error occurred in the shell; check `message` for details |
+
+---
+
+## 7. TypeScript types
+
+Copy these into your mini-app if you want type checking without importing the SDK.
+
+```ts
+interface LinkoraBridge {
+  wallet: {
+    getAddress(): Promise<string>;
+    signTransaction(xdr: string): Promise<string>;
+  };
+  profile: {
+    getProfile(): Promise<Profile>;
+  };
+  post: {
+    createPost(draft: PostDraft): Promise<void>;
+  };
+}
+
+interface Profile {
+  address: string; // Stellar public key
+  handle: string; // e.g. "@alice"
+  displayName: string;
+  bio: string;
+  avatarUrl: string;
+  followerCount: number;
+  followingCount: number;
+}
+
+interface PostDraft {
+  text?: string;
+  mediaUrl?: string;
+  replyToPostId?: number;
+}
+
+type BridgeErrorCode =
+  | "BRIDGE_NOT_READY"
+  | "PERMISSION_DENIED"
+  | "WALLET_NOT_CONNECTED"
+  | "USER_CANCELLED"
+  | "INVALID_XDR"
+  | "UNKNOWN_ERROR";
+
+interface BridgeError extends Error {
+  code: BridgeErrorCode;
+}
+
+declare const LinkoraBridge: LinkoraBridge;
+```

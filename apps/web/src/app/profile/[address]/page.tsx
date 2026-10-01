@@ -27,6 +27,7 @@ import { signTransaction } from "@stellar/freighter-api";
 import { LinkoraClient } from "linkora-sdk";
 import { buildSignAndSubmit } from "@/lib/tx";
 import { addToBlockedList, removeFromBlockedList } from "@/lib/blockedStore";
+import { BlurhashImage } from "@/components/BlurhashImage";
 
 const CONTRACT_ID = process.env.NEXT_PUBLIC_CONTRACT_ID || "CDUMMY";
 const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || "https://soroban-testnet.stellar.org";
@@ -321,10 +322,13 @@ export default function ProfilePage() {
           className="flex flex-col md:flex-row items-start md:items-center gap-4 md:gap-6 bg-[var(--bg-secondary)] p-4 md:p-6 rounded-2xl border border-[var(--bg-tertiary)]"
         >
           {/* Avatar */}
-          <img
+          <BlurhashImage
             src={blockieUrl(address)}
             alt={`${profile.username}'s avatar`}
-            className="w-24 h-24 rounded-full border-4 border-[var(--bg-primary)]"
+            width={96}
+            height={96}
+            wrapperClassName="w-24 h-24 rounded-full border-4 border-[var(--bg-primary)] shrink-0 overflow-hidden"
+            className="rounded-full"
             id="profile-avatar"
           />
 
@@ -537,7 +541,14 @@ function PostCard({ post }: { post: IndexerPost }) {
       aria-label={`Post ${post.id}`}
     >
       <div className="flex items-center gap-3 mb-3">
-        <img src={blockieUrl(post.author)} alt="" className="w-8 h-8 rounded-full" />
+        <BlurhashImage
+          src={blockieUrl(post.author)}
+          alt=""
+          width={32}
+          height={32}
+          wrapperClassName="w-8 h-8 rounded-full shrink-0 overflow-hidden"
+          className="rounded-full"
+        />
         <span className="font-mono text-sm text-[var(--text-muted)]">{truncate(post.author)}</span>
         <span className="text-xs text-[var(--text-muted)] ml-auto">
           {ledgerToRelative(post.created_ledger)}

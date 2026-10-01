@@ -1,9 +1,5 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "remoteCache": {
-    "enabled": true,
-    "signature": true
-  },
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
@@ -28,24 +24,49 @@
     "format": {
       "outputs": []
     },
-    "@linkora/reputation#build": {
+
+    "services/notification#build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**"]
     },
-    "@linkora/reputation#test": {
-      "dependsOn": ["^build"]
-    },
-    "@linkora/reputation#typecheck": {
+    "services/notification#test": {
+      "dependsOn": ["^build"],
       "cache": false
     },
-    "@linkora/analytics#build": {
+
+    "services/search#build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**"]
     },
-    "@linkora/analytics#test": {
-      "dependsOn": ["^build"]
+    "services/search#test": {
+      "dependsOn": ["^build"],
+      "cache": false
     },
-    "@linkora/analytics#typecheck": {
+
+    "services/media#build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"]
+    },
+    "services/media#test": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
+
+    "packages/reputation#build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"]
+    },
+    "packages/reputation#test": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
+
+    "packages/analytics#build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"]
+    },
+    "packages/analytics#test": {
+      "dependsOn": ["^build"],
       "cache": false
     }
   }

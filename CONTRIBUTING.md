@@ -1,245 +1,209 @@
 # Contributing to Linkora
 
-Thanks for your interest in contributing! This guide covers everything you need
-to get your environment running, make a change, and get it merged.
+Thank you for your interest in contributing! This guide covers everything you
+need to get your environment ready, follow our branch conventions, and get a PR
+merged.
 
 ---
 
 ## Table of Contents
 
-1. [Environment Setup](#environment-setup)
-2. [Branch Naming Conventions](#branch-naming-conventions)
-3. [Running Tests](#running-tests)
-4. [Lockfile Management](#lockfile-management)
-5. [PR Process](#pr-process)
+1. [Prerequisites](#prerequisites)
+2. [Development Setup](#development-setup)
+3. [Branch Conventions](#branch-conventions)
+4. [Commit Guidelines](#commit-guidelines)
+5. [Pull Request Process](#pull-request-process)
+6. [Branch Protection Rules](#branch-protection-rules)
+7. [Code Style](#code-style)
+8. [Testing](#testing)
 
 ---
 
-## Environment Setup
+## Prerequisites
 
-### Prerequisites
+| Tool           | Minimum version     | Notes                                |
+| -------------- | ------------------- | ------------------------------------ |
+| Node.js        | See `.node-version` | Managed via `nvm` or `fnm`           |
+| pnpm           | 9.x                 | `npm i -g pnpm`                      |
+| Rust           | stable              | `rustup toolchain install stable`    |
+| Docker         | 24+                 | Required for integration tests       |
+| Docker Compose | v2                  | Bundled with Docker Desktop          |
+| stellar-cli    | latest              | `cargo install --locked stellar-cli` |
 
-| Tool        | Minimum version | Install                                      |
-| ----------- | --------------- | -------------------------------------------- |
-| Node.js     | see `.node-version` | [nodejs.org](https://nodejs.org)         |
-| pnpm        | 9.x             | `npm install -g pnpm`                        |
-| Rust        | stable          | [rustup.rs](https://rustup.rs)               |
-| Docker      | 24+             | [docker.com](https://www.docker.com)         |
-| Stellar CLI | latest          | [stellar.org/docs](https://stellar.org/docs) |
+Run `./scripts/setup.sh` after cloning — it checks all prerequisites, installs
+dependencies, and builds the contracts.
 
-### Quickstart
+---
+
+## Development Setup
 
 ```bash
-# Clone the repo
-git clone https://github.com/ijayabby/Linkora-social.git
+# 1. Fork and clone
+git clone https://github.com/<your-handle>/Linkora-social.git
 cd Linkora-social
 
-# Run the automated setup script — checks prerequisites, installs deps, and
-# builds the contracts
+# 2. Add the canonical upstream remote
+git remote add upstream https://github.com/julianajohn7202-stack/Linkora-social.git
+
+# 3. Run the setup script
 ./scripts/setup.sh
-```
 
-The setup script will:
+# 4. Start the local stack
+docker compose up -d
 
-- Verify all prerequisites are installed and meet minimum versions
-- Run `pnpm install` to install all JavaScript/TypeScript dependencies
-- Build the Soroban smart contracts with `cargo build`
-
-### Manual setup
-
-If you prefer to set things up by hand:
-
-```bash
-# Install JS/TS dependencies (uses the committed pnpm-lock.yaml)
-pnpm install
-
-# Build contracts
-cd packages/contracts && cargo build --target wasm32v1-none --release
+# 5. Start the web frontend
+cd apps/web && pnpm dev   # http://localhost:3000
 ```
 
 ---
 
-## Branch Naming Conventions
+## Branch Conventions
 
-Use one of the following prefixes so that CI labels and GitHub automation work
-correctly:
+| Type    | Pattern                            | Example                         |
+| ------- | ---------------------------------- | ------------------------------- |
+| Feature | `feat/<issue>-short-description`   | `feat/42-creator-profiles`      |
+| Bug fix | `fix/<issue>-short-description`    | `fix/99-follow-count-overflow`  |
+| Chore   | `chore/<issue>-short-description`  | `chore/120-update-dependencies` |
+| Docs    | `docs/<issue>-short-description`   | `docs/55-indexer-design`        |
+| DevOps  | `devops/<issue>-short-description` | `devops/288-branch-protection`  |
 
-| Prefix    | Use for                                         | Example                        |
-| --------- | ----------------------------------------------- | ------------------------------ |
-| `feat/`   | New features or capabilities                    | `feat/add-tipping-ui`          |
-| `fix/`    | Bug fixes                                       | `fix/lockfile-drift`           |
-| `chore/`  | Maintenance, dependency bumps, tooling          | `chore/upgrade-pnpm-9`         |
-| `docs/`   | Documentation-only changes                     | `docs/update-contributing`     |
-| `refactor/` | Code restructuring with no behaviour change   | `refactor/sdk-client-cleanup`  |
-| `test/`   | Adding or updating tests                        | `test/coverage-governance`     |
+Rules:
 
-Always branch off `main`:
-
-```bash
-git checkout main && git pull
-git checkout -b feat/<short-description>
-```
+- Branch off from `main`. Always rebase on `upstream/main` before opening a PR.
+- Use lowercase kebab-case.
+- Include the issue number when one exists.
+- Keep branches focused — one logical change per branch.
 
 ---
 
-## Running Tests
-
-### JavaScript / TypeScript
-
-```bash
-# Run all JS/TS tests (unit + component) across the monorepo
-pnpm test
-
-# Run tests for a single package
-pnpm --filter @linkora/sdk test
-pnpm --filter indexer test
-```
-
-### Rust (Soroban contracts)
-
-```bash
-# From the repo root
-pnpm --filter contracts test
-
-# Or directly with cargo
-cd packages/contracts && cargo test
-```
-
-### Migration tests
-
-The migration test suite spins up a throwaway PostgreSQL container, runs all
-migrations, validates the schema snapshot, and checks idempotency:
-
-```bash
-bash tests/migrations/test-migrations.sh
-```
-
-Requires Docker Compose v2.
-
-### Integration / E2E tests
-
-```bash
-# Runs against a local Stellar sandbox (requires Docker + stellar-cli)
-pnpm test:integration
-```
-
-See [`tests/integration/run_e2e.sh`](./tests/integration/run_e2e.sh) for
-details.
-
----
-
-## Lockfile Management
-
-### Why the lockfile is committed
-
-`pnpm-lock.yaml` is committed to the repository so that every developer,
-every CI run, and every deployment uses exactly the same dependency tree.
-This eliminates "works on my machine" issues caused by transitive dependency
-drift.
-
-### How CI enforces it
-
-The `lockfile-check` job in `.github/workflows/ci.yml` runs **before** any
-other JavaScript job and performs two checks:
-
-1. `pnpm install --frozen-lockfile` — pnpm aborts with a clear error if
-   `pnpm-lock.yaml` does not satisfy all `package.json` files in the workspace.
-2. `git diff --exit-code pnpm-lock.yaml` — fails the job if a frozen install
-   somehow produced a modified lockfile, catching any remaining drift.
-
-The `js-ci` and `lint` jobs both declare `needs: lockfile-check`, so they are
-skipped entirely if the lockfile is out of date, giving contributors a fast,
-clear failure rather than a confusing downstream error.
-
-### How to update the lockfile
-
-Whenever you add, remove, or change a dependency in any `package.json`, you
-**must** regenerate the lockfile and commit it together with your change:
-
-```bash
-# After editing package.json (add/remove/change a dependency)
-pnpm install
-
-# Verify the lockfile is now in sync
-git diff pnpm-lock.yaml   # review the diff
-
-# Stage and commit both files together
-git add package.json pnpm-lock.yaml
-git commit -m "chore: add <package-name>"
-```
-
-Common scenarios:
-
-```bash
-# Add a runtime dependency to a specific package
-pnpm --filter apps/web add react-query
-
-# Add a dev dependency to the workspace root
-pnpm add -D -w some-tool
-
-# Remove a dependency
-pnpm --filter apps/web remove old-package
-
-# Upgrade all dependencies (use with care — review the diff)
-pnpm update
-```
-
-After any of these commands, `pnpm-lock.yaml` will be modified. Always
-commit it in the same PR as the `package.json` change.
-
-### Fixing a failing lockfile check
-
-If the `lockfile-check` CI job fails on your PR, it means `pnpm-lock.yaml` is
-not in sync with the `package.json` files in your branch. To fix it:
-
-```bash
-# Regenerate the lockfile from your current package.json files
-pnpm install
-
-# Commit the updated lockfile
-git add pnpm-lock.yaml
-git commit -m "chore: sync pnpm lockfile"
-git push
-```
-
----
-
-## PR Process
-
-1. **Open a PR against `main`** with a clear title following
-   [Conventional Commits](https://www.conventionalcommits.org/):
-   `feat(sdk): add typed pool client`.
-
-2. **Fill in the PR template** — describe the change, how it was tested, and
-   reference the issue it closes (`Closes #NNN`).
-
-3. **All CI checks must pass** before a review is requested:
-   - `lockfile-check` — lockfile is in sync
-   - `js-ci` — TypeScript typechecks, tests, and build pass
-   - `lint` — no lint errors
-   - `unit-tests` — Rust contract tests pass
-
-4. **Request a review** from at least one codeowner (see
-   [`.github/CODEOWNERS`](./.github/CODEOWNERS)).
-
-5. **Address review comments** with new commits — do not force-push once a
-   review is in progress.
-
-6. **Squash and merge** — the project uses squash merges on `main` to keep the
-   commit history clean.
-
-### Commit message conventions
+## Commit Guidelines
 
 We follow [Conventional Commits](https://www.conventionalcommits.org/):
 
 ```
-<type>(<scope>): <short description>
+<type>(<scope>): <short summary>
 
 [optional body]
 
-[optional footer: Closes #NNN]
+[optional footer — e.g. Closes #42]
 ```
 
-Types: `feat`, `fix`, `docs`, `chore`, `refactor`, `test`, `perf`, `ci`.
+Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `ci`, `style`.
 
-Husky runs a commit-msg hook to enforce this format locally.
+Examples:
+
+```
+feat(contracts): add post-moderation hook
+fix(indexer): handle null ledger sequence on genesis block
+docs(contributing): add branch protection rules section
+```
+
+---
+
+## Pull Request Process
+
+1. **Rebase** your branch on the latest `upstream/main` before opening a PR:
+
+   ```bash
+   git fetch upstream
+   git rebase upstream/main
+   ```
+
+2. **Push** your branch to your fork:
+
+   ```bash
+   git push -u origin <branch-name>
+   ```
+
+3. **Open** a PR against `julianajohn7202-stack/Linkora-social:main`.
+
+4. **Title**: keep it under 70 characters and use the Conventional Commits
+   format (e.g. `feat(sdk): add typed tip client`).
+
+5. **Description**: explain _what_ was implemented and reference the issue
+   with `Closes #<issue>`.
+
+6. **Wait for CI** — all required status checks must pass before merging.
+
+7. A maintainer will review and approve. Address any requested changes by
+   pushing additional commits (do **not** force-push after review has started).
+
+8. Once approved and green, the PR will be merged using **rebase merge** to
+   keep a linear history on `main`.
+
+---
+
+## Branch Protection Rules
+
+The `main` branch is protected with the following rules enforced via GitHub
+repository settings:
+
+| Rule                                      | Setting                                                                                       |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Require pull request before merging       | ✅ Enabled                                                                                    |
+| Required approving reviews                | **1** (minimum)                                                                               |
+| Dismiss stale reviews on new push         | ✅ Enabled                                                                                    |
+| Require status checks to pass             | ✅ Enabled                                                                                    |
+| Required status checks                    | `CI / JS/TS — typecheck, test, build`<br>`CI / Lint TypeScript Packages`<br>`CI / Unit Tests` |
+| Require branches to be up to date         | ✅ Enabled                                                                                    |
+| Require linear history (no merge commits) | ✅ Enabled                                                                                    |
+| Do not allow force pushes                 | ✅ Enabled                                                                                    |
+| Do not allow deletions                    | ✅ Enabled                                                                                    |
+
+### Why these rules?
+
+- **PR reviews** catch bugs and keep the team aligned before code lands.
+- **Status checks** ensure every merge passes typecheck, lint, unit tests, and
+  contract tests — so `main` is always deployable.
+- **Linear history** makes `git bisect` reliable and the log easy to read.
+  Use `git rebase` instead of merge commits when incorporating upstream changes.
+
+### Applying the rules (maintainers only)
+
+For maintainers, these settings live in:
+**GitHub → Settings → Branches → Branch protection rules → `main`**.
+
+A GitHub CLI command to apply them (requires `admin` scope):
+
+```bash
+gh api repos/julianajohn7202-stack/Linkora-social/branches/main/protection \
+  --method PUT \
+  --field required_status_checks='{"strict":true,"contexts":["CI / JS/TS — typecheck, test, build","CI / Lint TypeScript Packages","CI / Unit Tests"]}' \
+  --field enforce_admins=false \
+  --field required_pull_request_reviews='{"required_approving_review_count":1,"dismiss_stale_reviews":true}' \
+  --field restrictions=null \
+  --field required_linear_history=true \
+  --field allow_force_pushes=false \
+  --field allow_deletions=false
+```
+
+---
+
+## Code Style
+
+- **TypeScript**: enforced by ESLint (`pnpm lint`) and Prettier (`pnpm format`).
+  Config lives in `.eslintrc.base.json` and `.prettierrc`.
+- **Rust**: enforced by `rustfmt` and `clippy`. Run `cargo fmt` and
+  `cargo clippy -- -D warnings` before pushing.
+- A pre-commit hook (Husky) runs linting automatically on staged files.
+
+---
+
+## Testing
+
+```bash
+# TypeScript unit tests
+pnpm test
+
+# Contract unit + fuzz tests
+pnpm --filter contracts test
+
+# Integration tests (requires Docker)
+bash tests/integration/run_e2e.sh
+
+# Migration tests (requires Docker)
+bash tests/migrations/test-migrations.sh
+```
+
+All tests must pass locally before opening a PR. CI will re-run them on every
+push to a PR branch and on every push to `main`.
