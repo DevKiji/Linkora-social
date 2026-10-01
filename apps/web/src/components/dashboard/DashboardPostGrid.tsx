@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 export interface PostItem {
   id: string;
@@ -89,7 +89,7 @@ const mockPosts: PostItem[] = [
     avatarBg: "#A78BFA",
     time: "12h ago",
     content:
-      "Theme system with CSS custom properties allows instant toggling between dark navy (#0B1120) and crisp light theme tokens.",
+      "Theme system with CSS custom properties allows instant toggling between dark navy and crisp light theme tokens.",
     likes: 76,
     comments: 8,
     shares: 4,
@@ -100,11 +100,65 @@ interface DashboardPostGridProps {
   isLoading?: boolean;
 }
 
+/**
+ * DashboardPostGrid — masonry grid of posts with progressive per-card skeleton
+ * loading and stagger-in animation on data arrival.
+ *
+ * When `isLoading` is true, each skeleton card has its own loading state (one
+ * card at a time in a staggered reveal) rather than all cards appearing at once.
+ * Cards animate in when real data arrives to prevent CLS.
+ */
 export function DashboardPostGrid({ isLoading = false }: DashboardPostGridProps) {
   const [likedPosts, setLikedPosts] = useState<Record<string, boolean>>({});
   const [likeCounts, setLikeCounts] = useState<Record<string, number>>(
     mockPosts.reduce((acc, p) => ({ ...acc, [p.id]: p.likes }), {})
   );
+
+  // Track which skeleton cards are "revealed" to create the stagger effect.
+  const [revealedSkeletons, setRevealedSkeletons] = useState<number[]>([]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      setRevealedSkeletons([]);
+      return;
+    }
+
+    // Reveal skeleton cards one-by-one with a 120ms stagger — each card has
+    // its own loading state rather than the whole grid appearing at once.
+    let idx = 0;
+    const ids: ReturnType<typeof setInterval>[] = [];
+    const reveal = () => {
+      if (idx < mockPosts.length) {
+        const current = idx;
+        setRevealedSkeletons((prev) => [...prev, current]);
+        idx++;
+        ids.push(setTimeout(reveal, 120));
+      }
+    };
+    const initial = setTimeout(reveal, 0);
+
+    return () => {
+      clearTimeout(initial);
+      ids.forEach(clearTimeout);
+      setRevealedSkeletons([]);
+    };
+  }, [isLoading]);
+
+  // Stagger animate-in for real cards when loading resolves.
+  const [visibleCards, setVisibleCards] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (isLoading) {
+      setVisibleCards({});
+      return;
+    }
+    mockPosts.forEach((post, i) => {
+      const timer = setTimeout(() => {
+        setVisibleCards((prev) => ({ ...prev, [post.id]: true }));
+      }, i * 80);
+      return () => clearTimeout(timer);
+    });
+  }, [isLoading]);
 
   const handleLike = (id: string) => {
     setLikedPosts((prev) => {
@@ -120,21 +174,60 @@ export function DashboardPostGrid({ isLoading = false }: DashboardPostGridProps)
   if (isLoading) {
     return (
       <div className="dashboard-masonry-grid" style={{ padding: "24px" }}>
-        {[1, 2, 3, 4, 5, 6].map((idx) => (
-          <div key={idx} className="dashboard-post-card skeleton-card">
+        {mockPosts.map((_, idx) => (
+          <div
+            key={idx}
+            className="dashboard-post-card skeleton-card"
+            style={{
+              opacity: revealedSkeletons.includes(idx) ? 1 : 0,
+              transform: revealedSkeletons.includes(idx)
+                ? "translateY(0)"
+                : "translateY(8px)",
+              transition: "opacity 200ms ease, transform 200ms ease",
+            }}
+            aria-hidden={!revealedSkeletons.includes(idx)}
+          >
+            {/* Per-card skeleton: dimensions exactly match post card content */}
             <div
-              style={{ display: "flex", gap: "12px", alignItems: "center", marginBottom: "14px" }}
+              style={{
+                display: "flex",
+                gap: "12px",
+                alignItems: "center",
+                marginBottom: "14px",
+              }}
             >
-              <div className="skeleton-avatar" />
+              {/* Avatar skeleton — 42×42 matches real avatar */}
+              <div
+                className="skeleton-avatar"
+                style={{ width: "42px", height: "42px", flexShrink: 0 }}
+              />
               <div style={{ display: "flex", flexDirection: "column", gap: "6px", flex: 1 }}>
-                <div className="skeleton-line" style={{ width: "40%" }} />
-                <div className="skeleton-line" style={{ width: "25%" }} />
+                {/* Author name — matches ~40% width */}
+                <div className="skeleton-line" style={{ width: "40%", height: "14px" }} />
+                {/* Handle — matches ~25% width */}
+                <div className="skeleton-line" style={{ width: "25%", height: "12px" }} />
               </div>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              <div className="skeleton-line" style={{ width: "90%" }} />
-              <div className="skeleton-line" style={{ width: "80%" }} />
-              <div className="skeleton-line" style={{ width: "60%" }} />
+
+            {/* Content lines — matches post content text block */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "16px" }}>
+              <div className="skeleton-line" style={{ width: "90%", height: "14px" }} />
+              <div className="skeleton-line" style={{ width: "80%", height: "14px" }} />
+              <div className="skeleton-line" style={{ width: "60%", height: "14px" }} />
+            </div>
+
+            {/* Action bar — matches border-top action row */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                paddingTop: "12px",
+                borderTop: "1px solid var(--border, #334155)",
+              }}
+            >
+              <div className="skeleton-line" style={{ width: "52px", height: "14px" }} />
+              <div className="skeleton-line" style={{ width: "52px", height: "14px" }} />
+              <div className="skeleton-line" style={{ width: "52px", height: "14px" }} />
             </div>
           </div>
         ))}
@@ -147,22 +240,26 @@ export function DashboardPostGrid({ isLoading = false }: DashboardPostGridProps)
       {mockPosts.map((post) => {
         const isLiked = !!likedPosts[post.id];
         const currentLikes = likeCounts[post.id];
+        const isVisible = !!visibleCards[post.id];
 
         return (
           <article
             key={post.id}
             className="dashboard-post-card"
             style={{
-              backgroundColor: "var(--bg-card, #1E293B)",
+              backgroundColor: "var(--bg-card, var(--muted))",
               borderRadius: "16px",
-              border: "1px solid var(--border, #334155)",
+              border: "1px solid var(--border)",
               padding: "20px",
               marginBottom: "20px",
               breakInside: "avoid",
-              transition: "transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease",
+              transition:
+                "transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease, opacity 0.3s ease",
+              opacity: isVisible ? 1 : 0,
+              transform: isVisible ? "translateY(0)" : "translateY(8px)",
             }}
           >
-            {/* Post Header: Avatar + Username + Handle + Verified + Options */}
+            {/* Post Header */}
             <div
               style={{
                 display: "flex",
@@ -193,7 +290,7 @@ export function DashboardPostGrid({ isLoading = false }: DashboardPostGridProps)
                   <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                     <span
                       style={{
-                        color: "var(--text-primary, #F8FAFC)",
+                        color: "var(--foreground)",
                         fontWeight: 700,
                         fontSize: "0.95rem",
                       }}
@@ -206,30 +303,30 @@ export function DashboardPostGrid({ isLoading = false }: DashboardPostGridProps)
                         height="16"
                         viewBox="0 0 24 24"
                         fill="var(--accent-primary, #60A5FA)"
+                        aria-label="Verified"
                       >
                         <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
                       </svg>
                     )}
                   </div>
                   <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                    <span style={{ color: "var(--text-secondary, #94A3B8)", fontSize: "0.8rem" }}>
+                    <span style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>
                       {post.handle}
                     </span>
-                    <span style={{ color: "var(--border, #334155)" }}>•</span>
-                    <span style={{ color: "var(--text-secondary, #94A3B8)", fontSize: "0.8rem" }}>
+                    <span style={{ color: "var(--border)" }}>•</span>
+                    <span style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>
                       {post.time}
                     </span>
                   </div>
                 </div>
               </div>
 
-              {/* Three Dots More Options Menu */}
               <button
                 aria-label="More options"
                 style={{
                   border: "none",
                   background: "transparent",
-                  color: "var(--text-secondary, #94A3B8)",
+                  color: "var(--text-muted)",
                   cursor: "pointer",
                   padding: "4px 8px",
                   borderRadius: "6px",
@@ -244,7 +341,7 @@ export function DashboardPostGrid({ isLoading = false }: DashboardPostGridProps)
             <p
               style={{
                 margin: "0 0 16px 0",
-                color: "var(--text-primary, #F8FAFC)",
+                color: "var(--foreground)",
                 fontSize: "0.95rem",
                 lineHeight: 1.5,
               }}
@@ -252,14 +349,14 @@ export function DashboardPostGrid({ isLoading = false }: DashboardPostGridProps)
               {post.content}
             </p>
 
-            {/* Action Buttons: Like, Comment, Share */}
+            {/* Action Buttons */}
             <div
               style={{
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
                 paddingTop: "12px",
-                borderTop: "1px solid var(--border, #334155)",
+                borderTop: "1px solid var(--border)",
               }}
             >
               <button
@@ -271,7 +368,7 @@ export function DashboardPostGrid({ isLoading = false }: DashboardPostGridProps)
                   gap: "6px",
                   border: "none",
                   background: "transparent",
-                  color: isLiked ? "#EF4444" : "var(--text-secondary, #94A3B8)",
+                  color: isLiked ? "#EF4444" : "var(--text-muted)",
                   fontSize: "0.85rem",
                   fontWeight: 500,
                   cursor: "pointer",
@@ -299,7 +396,7 @@ export function DashboardPostGrid({ isLoading = false }: DashboardPostGridProps)
                   gap: "6px",
                   border: "none",
                   background: "transparent",
-                  color: "var(--text-secondary, #94A3B8)",
+                  color: "var(--text-muted)",
                   fontSize: "0.85rem",
                   fontWeight: 500,
                   cursor: "pointer",
@@ -326,7 +423,7 @@ export function DashboardPostGrid({ isLoading = false }: DashboardPostGridProps)
                   gap: "6px",
                   border: "none",
                   background: "transparent",
-                  color: "var(--text-secondary, #94A3B8)",
+                  color: "var(--text-muted)",
                   fontSize: "0.85rem",
                   fontWeight: 500,
                   cursor: "pointer",
