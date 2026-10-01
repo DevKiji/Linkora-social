@@ -196,6 +196,15 @@ The tables below list every public function on `LinkoraContract` grouped by modu
 7. [Worked Example](#7-worked-example)
 8. [Protected Endpoints](#8-protected-endpoints)
 9. [Known Limitations of v1](#9-known-limitations-of-v1)
+10. [Reputation Module (Post Scoring)](#10-reputation-module-post-scoring)
+    - [10.1 Overview and Implementation Status](#101-overview-and-implementation-status)
+    - [10.2 Storage](#102-storage)
+    - [10.3 Scoring Signals and Formula](#103-scoring-signals-and-formula)
+    - [10.4 Recency Decay](#104-recency-decay)
+    - [10.5 Tier Thresholds](#105-tier-thresholds)
+    - [10.6 Reading Scores via the Indexer API](#106-reading-scores-via-the-indexer-api)
+    - [10.7 Score Refresh Lifecycle](#107-score-refresh-lifecycle)
+    - [10.8 Planned: on-chain Reputation and SDK Integration](#108-planned-on-chain-reputation-and-sdk-integration)
 
 ---
 
