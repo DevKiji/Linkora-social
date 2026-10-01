@@ -69,6 +69,15 @@ export const options = {
 };
 
 // ---------------------------------------------------------------------------
+  Linkora Indexer — Search Load Test Results
+  Total requests : ${totalReqs}
+  Error rate     : ${errorRate}%
+  Avg latency    : ${avg} ms
+  P95 latency    : ${p95} ms  ${p95Status} (target: < 200 ms)
+  P99 latency    : ${p99} ms
+  Results saved to tests/load/results.json
+`;
+}
 // Seed data — representative Stellar-format addresses and IDs
 // ---------------------------------------------------------------------------
 
