@@ -203,16 +203,80 @@ function FollowButton({ isFollowing, displayName, onFollow, onUnfollow }: Follow
 // ── ProfileCard ──────────────────────────────────────────────────────────────
 
 export function ProfileCard({ profile }: ProfileCardProps) {
-  const [following, setFollowing] = useState(!!profile.isFollowing);
+  const initialState: FollowState = profile.isFollowing
+    ? "idle-following"
+    : "idle-follow";
+
+  const [followState, dispatch] = useReducer(followReducer, initialState);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelConfirmRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const followers = profile.followerCount ?? profile.follower_count ?? 0;
   const displayName = profile.username || formatAddress(profile.address);
 
+  // Drive the transition timers.
+  useEffect(() => {
+    if (followState === "transitioning-in" || followState === "transitioning-out") {
+      timerRef.current = setTimeout(() => {
+        dispatch({ type: "TRANSITION_DONE" });
+      }, 280);
+    }
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [followState]);
+
+  // Auto-dismiss the unfollow confirmation after 2.5 s if no action taken.
+  useEffect(() => {
+    if (followState === "confirming-unfollow") {
+      cancelConfirmRef.current = setTimeout(() => {
+        dispatch({ type: "CANCEL_CONFIRM" });
+      }, 2500);
+    }
+    return () => {
+      if (cancelConfirmRef.current) clearTimeout(cancelConfirmRef.current);
+    };
+  }, [followState]);
+
+  const handleButtonClick = () => {
+    if (followState === "idle-follow") dispatch({ type: "CLICK_FOLLOW" });
+    else if (followState === "idle-following") dispatch({ type: "CLICK_UNFOLLOW" });
+    else if (followState === "confirming-unfollow") dispatch({ type: "CONFIRM_UNFOLLOW" });
+  };
+
+  const isFollowingState =
+    followState === "idle-following" ||
+    followState === "confirming-unfollow" ||
+    followState === "transitioning-out";
+
+  const isAnimating =
+    followState === "transitioning-in" || followState === "transitioning-out";
+
+  // --- Button label content ---
+  let label: React.ReactNode;
+  if (followState === "confirming-unfollow") {
+    label = (
+      <span className="follow-btn-label follow-btn-label--confirm">Unfollow?</span>
+    );
+  } else if (isFollowingState) {
+    label = (
+      <span className="follow-btn-label">
+        <TickIcon className="follow-btn-tick" aria-hidden="true" />
+        Following
+      </span>
+    );
+  } else {
+    label = <span className="follow-btn-label">Follow</span>;
+  }
+
   return (
     <article className="flex flex-col sm:flex-row items-start sm:items-center gap-3 md:gap-4 rounded-lg border border-[var(--border)] bg-[var(--muted)] p-3 md:p-5">
+      {/* Avatar */}
       <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-violet-900/50 text-lg font-bold text-violet-200">
         {displayName.slice(0, 1).toUpperCase()}
       </div>
 
+      {/* Profile info */}
       <div className="min-w-0 flex-1">
         <h2 className="truncate font-semibold text-[var(--foreground)]">{displayName}</h2>
         <p className="truncate text-sm text-[var(--text-muted)]" title={profile.address}>
@@ -228,5 +292,24 @@ export function ProfileCard({ profile }: ProfileCardProps) {
         onUnfollow={() => setFollowing(false)}
       />
     </article>
+  );
+}
+
+function TickIcon({ className }: { className?: string; "aria-hidden"?: "true" }) {
+  return (
+    <svg
+      className={className}
+      width="14"
+      height="14"
+      viewBox="0 0 14 14"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <polyline points="2 7 5.5 10.5 12 3.5" />
+    </svg>
   );
 }
