@@ -47,9 +47,10 @@ export function DashboardHeader({ isLoading, onToggleLoading }: DashboardHeaderP
           </p>
         </div>
 
-        {/* Skeleton Toggle Button & Create Action */}
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+        {/* Skeleton Toggle & Create Action */}
+        <div className="flex items-center gap-2.5">
           <button
+            type="button"
             onClick={onToggleLoading}
             style={{
               padding: "8px 14px",
@@ -84,12 +85,13 @@ export function DashboardHeader({ isLoading, onToggleLoading }: DashboardHeaderP
       </div>
 
       {/* Sub-Navigation Tabs */}
-      <nav style={{ display: "flex", gap: "8px", overflowX: "auto" }}>
+      <nav className="flex gap-2 overflow-x-auto" aria-label="Dashboard tabs">
         {subNavTabs.map((tab) => {
           const isActive = activeTab === tab;
           return (
             <button
               key={tab}
+              type="button"
               onClick={() => setActiveTab(tab)}
               style={{
                 padding: "8px 16px",
