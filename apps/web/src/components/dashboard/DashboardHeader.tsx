@@ -13,13 +13,36 @@ export function DashboardHeader({ isLoading, onToggleLoading }: DashboardHeaderP
   const [activeTab, setActiveTab] = useState("Cont rives");
 
   return (
-    <header className="flex flex-col gap-4 border-b border-[var(--border)] bg-[var(--background)] px-6 pb-4 pt-6">
-      <div className="flex items-center justify-between">
+    <header
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "16px",
+        padding: "24px 24px 16px 24px",
+        borderBottom: "1px solid var(--color-border)",
+        backgroundColor: "var(--background)",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-[var(--foreground)]">
+          <h1
+            style={{
+              margin: 0,
+              color: "var(--foreground)",
+              fontSize: "1.75rem",
+              fontWeight: 800,
+              letterSpacing: "-0.03em",
+            }}
+          >
             Daskloode
           </h1>
-          <p className="mt-1 text-sm text-[var(--text-muted)]">
+          <p
+            style={{
+              margin: "4px 0 0",
+              color: "var(--text-muted)",
+              fontSize: "0.9rem",
+            }}
+          >
             Explore community updates, Stellar Soroban posts, and custom content streams.
           </p>
         </div>
@@ -29,13 +52,32 @@ export function DashboardHeader({ isLoading, onToggleLoading }: DashboardHeaderP
           <button
             type="button"
             onClick={onToggleLoading}
-            className="rounded-xl border border-[var(--border)] bg-[var(--muted)] px-4 py-2 text-sm font-medium text-[var(--text-muted)] transition-colors hover:border-violet-500/60 hover:text-violet-400"
+            style={{
+              padding: "8px 14px",
+              borderRadius: "10px",
+              border: "1px solid var(--color-border)",
+              backgroundColor: "var(--muted)",
+              color: "var(--text-muted)",
+              fontSize: "0.85rem",
+              fontWeight: 500,
+              cursor: "pointer",
+            }}
           >
             {isLoading ? "Show Posts" : "Skeleton View"}
           </button>
           <button
-            type="button"
-            className="rounded-xl bg-gradient-to-r from-blue-400 to-indigo-400 px-5 py-2 text-sm font-semibold text-white shadow-md shadow-blue-400/20 transition-opacity hover:opacity-90"
+            style={{
+              padding: "8px 18px",
+              borderRadius: "10px",
+              border: "none",
+              background:
+                "linear-gradient(135deg, var(--color-secondary) 0%, var(--color-primary) 100%)",
+              color: "var(--color-text-on-brand)",
+              fontSize: "0.9rem",
+              fontWeight: 600,
+              cursor: "pointer",
+              boxShadow: "0 4px 12px color-mix(in srgb, var(--color-primary) 25%, transparent)",
+            }}
           >
             + Create Post
           </button>
@@ -51,12 +93,18 @@ export function DashboardHeader({ isLoading, onToggleLoading }: DashboardHeaderP
               key={tab}
               type="button"
               onClick={() => setActiveTab(tab)}
-              className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-all ${
-                isActive
-                  ? "border border-violet-400 bg-[var(--muted)] font-semibold text-violet-400"
-                  : "border border-transparent text-[var(--text-muted)] hover:text-[var(--foreground)]"
-              }`}
-              aria-current={isActive ? "page" : undefined}
+              style={{
+                padding: "8px 16px",
+                borderRadius: "20px",
+                border: isActive ? "1px solid var(--color-primary)" : "1px solid transparent",
+                backgroundColor: isActive ? "var(--muted)" : "transparent",
+                color: isActive ? "var(--color-primary)" : "var(--text-muted)",
+                fontSize: "0.9rem",
+                fontWeight: isActive ? 600 : 500,
+                cursor: "pointer",
+                transition: "all 0.2s ease",
+                whiteSpace: "nowrap",
+              }}
             >
               {tab}
             </button>
