@@ -339,127 +339,23 @@ body {
   padding-bottom: calc(4rem + env(safe-area-inset-bottom));
 }
 
-/* ── Follow / Unfollow button animations (Issue #174) ── */
-
-/* Base button shape */
-.follow-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.375rem;
-  border-radius: 0.5rem;
-  padding: 0.5rem 1rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-  user-select: none;
-  /* Smooth background / border / color swap */
-  transition:
-    background-color 200ms ease,
-    border-color 200ms ease,
-    color 200ms ease,
-    box-shadow 200ms ease;
-}
-
-.follow-btn:disabled {
-  cursor: default;
-  opacity: 0.7;
-}
-
-/* "Follow" state — filled primary */
-.follow-btn--follow {
-  background: #7c3aed; /* var(--color-primary) */
-  border: 1px solid transparent;
-  color: #ffffff;
-}
-.follow-btn--follow:not(:disabled):hover {
-  background: #6d28d9; /* var(--color-primary-hover) */
-}
-
-/* "Following" state — outlined */
-.follow-btn--following {
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--foreground);
-}
-.follow-btn--following:not(:disabled):hover {
-  border-color: rgba(239, 68, 68, 0.6); /* red-500/60 */
-  color: rgb(252 165 165); /* red-300 */
-}
-
-/* "Unfollow?" confirmation flash */
-.follow-btn--confirm {
-  background: transparent;
-  border: 1px solid rgba(239, 68, 68, 0.5);
-  color: rgb(252 165 165);
-  animation: confirmPulse 300ms ease;
-}
-
-@keyframes confirmPulse {
-  0% { transform: scale(1); }
-  40% { transform: scale(1.06); }
-  100% { transform: scale(1); }
-}
-
-/* Label wrapper — enables cross-fade between "Follow" / "Following" */
-.follow-btn-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  animation: labelFadeIn 220ms ease both;
-}
-
-@keyframes labelFadeIn {
+/* ── FeeTooltip animation ── */
+@keyframes fadeInTooltip {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateX(-50%) translateY(4px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
-  }
-}
+    transform: translateX(-50%) translateY(0);
 
-/* Tick icon — scales in when "Following" state is entered */
-.follow-btn-tick {
-  display: inline-block;
-  animation: tickScaleIn 260ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
-  transform-origin: center;
-}
-
-@keyframes tickScaleIn {
-  from {
-    opacity: 0;
-    transform: scale(0) rotate(-15deg);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) rotate(0deg);
-  }
-}
-
-/* "Unfollow?" label gets a subtle shake to signal confirmation needed */
-.follow-btn-label--confirm {
-  animation: confirmShake 280ms ease;
-}
-
-@keyframes confirmShake {
-  0%   { transform: translateX(0); }
-  25%  { transform: translateX(-3px); }
-  50%  { transform: translateX(3px); }
-  75%  { transform: translateX(-2px); }
-  100% { transform: translateX(0); }
-}
-
-/* Respect prefers-reduced-motion — disable all follow button animations */
+/* ── Issue #174: Follow/Unfollow button — disable all transitions when the
+   user prefers reduced motion. Covers the CheckIcon slide-in, label
+   cross-fade, and button bg/color transitions. ── */
 @media (prefers-reduced-motion: reduce) {
-  .follow-btn,
-  .follow-btn-label,
-  .follow-btn-tick,
-  .follow-btn-label--confirm,
-  .follow-btn--confirm {
-    animation: none !important;
+  button[aria-pressed],
+  button[aria-pressed] * {
     transition: none !important;
-    transform: none !important;
+    animation: none !important;
   }
 }
