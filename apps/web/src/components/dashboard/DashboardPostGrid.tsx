@@ -2,6 +2,70 @@
 
 import React, { useEffect, useState } from "react";
 
+// ── Stat Card Skeleton ───────────────────────────────────────────────────────
+// A single stat card skeleton whose dimensions match the real card exactly.
+// The `animationDelay` prop creates a stagger effect so cards animate in one
+// by one instead of all at once, avoiding a jarring block-flash (CLS).
+interface StatCardSkeletonProps {
+  /** Stagger delay in milliseconds so cards animate in one after another */
+  animationDelay?: number;
+}
+
+export function StatCardSkeleton({ animationDelay = 0 }: StatCardSkeletonProps) {
+  return (
+    <div
+      role="status"
+      aria-label="Loading stat card"
+      className="skeleton-stat-card"
+      style={{
+        backgroundColor: "var(--bg-card, #1E293B)",
+        borderRadius: "16px",
+        border: "1px solid var(--border, #334155)",
+        padding: "20px",
+        marginBottom: "20px",
+        breakInside: "avoid",
+        /* Fixed min-height matching real card to prevent CLS */
+        minHeight: "140px",
+        display: "flex",
+        flexDirection: "column",
+        gap: "12px",
+        /* Fade-in animation with stagger delay */
+        animation: "statCardFadeIn 0.35s ease forwards",
+        animationDelay: `${animationDelay}ms`,
+        opacity: 0,
+      }}
+    >
+      {/* Author row */}
+      <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+        <div className="skeleton-avatar" />
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px", flex: 1 }}>
+          <div className="skeleton-line" style={{ width: "40%" }} />
+          <div className="skeleton-line" style={{ width: "25%", height: "10px" }} />
+        </div>
+      </div>
+      {/* Content lines */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+        <div className="skeleton-line" style={{ width: "90%" }} />
+        <div className="skeleton-line" style={{ width: "80%" }} />
+        <div className="skeleton-line" style={{ width: "60%" }} />
+      </div>
+      {/* Footer action row */}
+      <div
+        style={{
+          display: "flex",
+          gap: "16px",
+          paddingTop: "12px",
+          borderTop: "1px solid var(--border, #334155)",
+        }}
+      >
+        <div className="skeleton-line" style={{ width: "48px", height: "16px" }} />
+        <div className="skeleton-line" style={{ width: "48px", height: "16px" }} />
+        <div className="skeleton-line" style={{ width: "48px", height: "16px" }} />
+      </div>
+    </div>
+  );
+}
+
 export interface PostItem {
   id: string;
   author: string;
@@ -174,62 +238,11 @@ export function DashboardPostGrid({ isLoading = false }: DashboardPostGridProps)
   if (isLoading) {
     return (
       <div className="dashboard-masonry-grid" style={{ padding: "24px" }}>
-        {mockPosts.map((_, idx) => (
-          <div
+        {[0, 1, 2, 3, 4, 5].map((idx) => (
+          <StatCardSkeleton
             key={idx}
-            className="dashboard-post-card skeleton-card"
-            style={{
-              opacity: revealedSkeletons.includes(idx) ? 1 : 0,
-              transform: revealedSkeletons.includes(idx)
-                ? "translateY(0)"
-                : "translateY(8px)",
-              transition: "opacity 200ms ease, transform 200ms ease",
-            }}
-            aria-hidden={!revealedSkeletons.includes(idx)}
-          >
-            {/* Per-card skeleton: dimensions exactly match post card content */}
-            <div
-              style={{
-                display: "flex",
-                gap: "12px",
-                alignItems: "center",
-                marginBottom: "14px",
-              }}
-            >
-              {/* Avatar skeleton — 42×42 matches real avatar */}
-              <div
-                className="skeleton-avatar"
-                style={{ width: "42px", height: "42px", flexShrink: 0 }}
-              />
-              <div style={{ display: "flex", flexDirection: "column", gap: "6px", flex: 1 }}>
-                {/* Author name — matches ~40% width */}
-                <div className="skeleton-line" style={{ width: "40%", height: "14px" }} />
-                {/* Handle — matches ~25% width */}
-                <div className="skeleton-line" style={{ width: "25%", height: "12px" }} />
-              </div>
-            </div>
-
-            {/* Content lines — matches post content text block */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "16px" }}>
-              <div className="skeleton-line" style={{ width: "90%", height: "14px" }} />
-              <div className="skeleton-line" style={{ width: "80%", height: "14px" }} />
-              <div className="skeleton-line" style={{ width: "60%", height: "14px" }} />
-            </div>
-
-            {/* Action bar — matches border-top action row */}
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                paddingTop: "12px",
-                borderTop: "1px solid var(--border, #334155)",
-              }}
-            >
-              <div className="skeleton-line" style={{ width: "52px", height: "14px" }} />
-              <div className="skeleton-line" style={{ width: "52px", height: "14px" }} />
-              <div className="skeleton-line" style={{ width: "52px", height: "14px" }} />
-            </div>
-          </div>
+            animationDelay={idx * 80}
+          />
         ))}
       </div>
     );
@@ -247,9 +260,9 @@ export function DashboardPostGrid({ isLoading = false }: DashboardPostGridProps)
             key={post.id}
             className="dashboard-post-card"
             style={{
-              backgroundColor: "var(--bg-card, var(--muted))",
+              backgroundColor: "var(--background)",
               borderRadius: "16px",
-              border: "1px solid var(--border)",
+              border: "1px solid var(--color-border)",
               padding: "20px",
               marginBottom: "20px",
               breakInside: "avoid",
@@ -302,8 +315,7 @@ export function DashboardPostGrid({ isLoading = false }: DashboardPostGridProps)
                         width="16"
                         height="16"
                         viewBox="0 0 24 24"
-                        fill="var(--accent-primary, #60A5FA)"
-                        aria-label="Verified"
+                        fill="var(--color-secondary)"
                       >
                         <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
                       </svg>
@@ -313,7 +325,7 @@ export function DashboardPostGrid({ isLoading = false }: DashboardPostGridProps)
                     <span style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>
                       {post.handle}
                     </span>
-                    <span style={{ color: "var(--border)" }}>•</span>
+                    <span style={{ color: "var(--color-border)" }}>•</span>
                     <span style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>
                       {post.time}
                     </span>
@@ -356,7 +368,7 @@ export function DashboardPostGrid({ isLoading = false }: DashboardPostGridProps)
                 justifyContent: "space-between",
                 alignItems: "center",
                 paddingTop: "12px",
-                borderTop: "1px solid var(--border)",
+                borderTop: "1px solid var(--color-border)",
               }}
             >
               <button
@@ -368,7 +380,7 @@ export function DashboardPostGrid({ isLoading = false }: DashboardPostGridProps)
                   gap: "6px",
                   border: "none",
                   background: "transparent",
-                  color: isLiked ? "#EF4444" : "var(--text-muted)",
+                  color: isLiked ? "var(--color-error)" : "var(--text-muted)",
                   fontSize: "0.85rem",
                   fontWeight: 500,
                   cursor: "pointer",
@@ -379,8 +391,8 @@ export function DashboardPostGrid({ isLoading = false }: DashboardPostGridProps)
                   width="18"
                   height="18"
                   viewBox="0 0 24 24"
-                  fill={isLiked ? "#EF4444" : "none"}
-                  stroke={isLiked ? "#EF4444" : "currentColor"}
+                  fill={isLiked ? "var(--color-error)" : "none"}
+                  stroke={isLiked ? "var(--color-error)" : "currentColor"}
                   strokeWidth="2"
                 >
                   <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
